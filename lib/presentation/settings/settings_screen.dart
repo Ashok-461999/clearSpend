@@ -66,6 +66,17 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 24),
           ],
           _Section(
+            title: 'SAVINGS',
+            children: [
+              _SavingsGoalTile(
+                profile: profile,
+                ref: ref,
+                onSetGoal: () => _editSavingsGoal(context, ref),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _Section(
             title: 'DATA',
             children: [
               _ExportTile(ref: ref),
@@ -219,6 +230,54 @@ class SettingsScreen extends ConsumerWidget {
             onPressed: () {
               final v = Money.parseToMinor(controller.text.trim());
               if (v != null) notifier.updateInitialBalance(v);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editSavingsGoal(BuildContext context, WidgetRef ref) {
+    final current = ref.read(savingsGoalProvider);
+    final strVal = current > 0 ? (current / 100).toStringAsFixed(0) : '';
+    final controller = TextEditingController(text: strVal);
+    showDialog(
+      context: context,
+      builder: (ctx) => _StyledDialog(
+        title: 'Monthly Savings Goal',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('How much do you want to save each month?',
+                style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: _inputDec('Enter savings goal', prefix: '₹ '),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              ref.read(savingsGoalProvider.notifier).state = 0;
+              ref.read(sharedPreferencesProvider).remove('savings_goal');
+              Navigator.pop(ctx);
+            },
+            child: const Text('Remove'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final v = Money.parseToMinor(controller.text.trim());
+              if (v != null) {
+                ref.read(savingsGoalProvider.notifier).state = v;
+                ref.read(sharedPreferencesProvider).setInt('savings_goal', v);
+              }
               Navigator.pop(ctx);
             },
             child: const Text('Save'),
@@ -817,6 +876,93 @@ class _BudgetTile extends StatelessWidget {
                         : AppTheme.textSecondary),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SavingsGoalTile extends StatelessWidget {
+  final UserProfile profile;
+  final WidgetRef ref;
+  final VoidCallback onSetGoal;
+  const _SavingsGoalTile({
+    required this.profile,
+    required this.ref,
+    required this.onSetGoal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final goal = ref.watch(savingsGoalProvider);
+    final historyState = ref.watch(historyControllerProvider);
+    final saved = historyState.totalIncome - historyState.totalExpense;
+    final goalDisplay = goal > 0 ? Money.format(goal) : 'Not set';
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.savings, size: 18, color: AppTheme.income),
+              const SizedBox(width: 8),
+              const Text('Monthly Savings Goal',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: AppTheme.textPrimary)),
+              const Spacer(),
+              Flexible(
+                child: Text(goalDisplay,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: AppTheme.textPrimary)),
+              ),
+            ],
+          ),
+          if (goal > 0) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: (saved / goal).clamp(0, 1),
+                minHeight: 10,
+                backgroundColor: AppTheme.border,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  saved >= goal ? AppTheme.income : AppTheme.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('Saved: ${Money.format(saved)}',
+                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                const Spacer(),
+                Text(
+                  saved >= goal
+                      ? 'Goal reached!'
+                      : '${((saved / goal) * 100).round()}%',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: saved >= goal ? AppTheme.income : AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: onSetGoal,
+              child: Text(goal > 0 ? 'Update Goal' : 'Set Goal'),
+            ),
           ),
         ],
       ),

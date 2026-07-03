@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/providers.dart';
 import '../../core/category.dart';
+import '../../core/money.dart';
 import '../../core/theme.dart';
 
 class ExpenseFormScreen extends ConsumerStatefulWidget {
@@ -78,6 +79,11 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(expenseFormControllerProvider);
     final notifier = ref.read(expenseFormControllerProvider.notifier);
+    final historyState = ref.watch(historyControllerProvider);
+    final settings = ref.watch(settingsControllerProvider);
+    final monthlyBudget = settings.profile.monthlyBudget;
+    final currentMonthExpense = historyState.totalExpense;
+    final budgetRatio = monthlyBudget > 0 ? (currentMonthExpense / monthlyBudget) : 0.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -195,6 +201,50 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 ),
               ],
             ),
+            if (monthlyBudget > 0 && budgetRatio >= 0.8) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: budgetRatio >= 1.0
+                      ? AppTheme.expenseGlass
+                      : AppTheme.warning.withAlpha(30),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: budgetRatio >= 1.0
+                        ? AppTheme.expense.withAlpha(60)
+                        : AppTheme.warning.withAlpha(60),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      budgetRatio >= 1.0
+                          ? Icons.gpp_bad
+                          : Icons.warning_amber_rounded,
+                      size: 18,
+                      color: budgetRatio >= 1.0
+                          ? AppTheme.expense
+                          : AppTheme.warning,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        budgetRatio >= 1.0
+                            ? 'You\'ve exceeded your monthly budget of ${Money.format(monthlyBudget)}!'
+                            : 'You\'ve used ${(budgetRatio * 100).round()}% of your monthly budget',
+                        style: TextStyle(
+                          color: budgetRatio >= 1.0
+                              ? AppTheme.expense
+                              : AppTheme.warning,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (state.error != null) ...[
               const SizedBox(height: 12),
               Container(
@@ -224,7 +274,10 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                   ? null
                   : () async {
                       final navigator = Navigator.of(context);
-                      final success = await notifier.submit();
+                      final success = await notifier.submit(
+                        currentMonthExpense: currentMonthExpense,
+                        monthlyBudget: monthlyBudget,
+                      );
                       if (success && mounted) navigator.pop();
                     },
               child: state.isSubmitting

@@ -90,3 +90,46 @@ final remainingBalanceProvider = Provider<int>((ref) {
   final settings = ref.watch(settingsControllerProvider);
   return settings.profile.initialBalance + historyState.totalIncome - historyState.totalExpense;
 });
+
+final budgetProgressProvider = Provider<double>((ref) {
+  final historyState = ref.watch(historyControllerProvider);
+  final budget = ref.watch(settingsControllerProvider).profile.monthlyBudget;
+  if (budget <= 0) return 0;
+  return (historyState.totalExpense / budget).clamp(0, 2);
+});
+
+final budgetRemainingProvider = Provider<int>((ref) {
+  final historyState = ref.watch(historyControllerProvider);
+  final budget = ref.watch(settingsControllerProvider).profile.monthlyBudget;
+  return budget - historyState.totalExpense;
+});
+
+final spendingScoreProvider = Provider<int>((ref) {
+  final progress = ref.watch(budgetProgressProvider);
+  if (progress <= 0) return 100;
+  final score = ((1 - progress) * 100).round().clamp(0, 100);
+  return score;
+});
+
+final dailyAverageProvider = Provider<int>((ref) {
+  final historyState = ref.watch(historyControllerProvider);
+  final now = DateTime.now();
+  final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+  final day = now.day.clamp(1, daysInMonth);
+  if (day == 0 || historyState.totalExpense <= 0) return 0;
+  return historyState.totalExpense ~/ day;
+});
+
+final projectedMonthEndProvider = Provider<int>((ref) {
+  final avg = ref.watch(dailyAverageProvider);
+  final now = DateTime.now();
+  final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+  final remaining = daysInMonth - now.day;
+  final historyState = ref.watch(historyControllerProvider);
+  return historyState.totalExpense + (avg * remaining);
+});
+
+final savingsGoalProvider = StateProvider<int>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return prefs.getInt('savings_goal') ?? 0;
+});
