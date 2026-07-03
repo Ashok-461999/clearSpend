@@ -455,6 +455,32 @@ class _ExpenseRow extends StatelessWidget {
                           ? AppTheme.income
                           : AppTheme.expense),
                 ),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () => _edit(context, ref),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardGlass,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.edit_outlined,
+                        size: 13, color: AppTheme.textSecondary),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () => _delete(context, ref),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.expenseGlass,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.delete_outline,
+                        size: 13, color: AppTheme.expense),
+                  ),
+                ),
               ],
             ),
           ),

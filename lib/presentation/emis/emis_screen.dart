@@ -25,45 +25,49 @@ class EmisScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: state.emis.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: AppTheme.cardSurface.withAlpha(100),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.calendar_month_outlined,
-                        size: 48, color: AppTheme.textSecondary.withAlpha(100)),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('No EMIs yet',
-                      style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  const Text('Tap + to add your first EMI',
-                      style: TextStyle(
-                          color: AppTheme.textSecondary, fontSize: 14)),
-                ],
-              ),
-            )
-          : ListView.builder(
+      body: ListView(
               padding: const EdgeInsets.all(16),
-              itemCount: state.emis.length,
-              itemBuilder: (context, index) => _EmiCard(
-                    emi: state.emis[index],
-                    onMarkPaid: () => ref
-                        .read(emiControllerProvider.notifier)
-                        .markPaid(state.emis[index].id!),
-                    onDelete: () => ref
-                        .read(emiControllerProvider.notifier)
-                        .deleteEmi(state.emis[index].id!),
-                  ),
+              children: [
+                if (state.emis.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 48, bottom: 24),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardSurface.withAlpha(100),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.calendar_month_outlined,
+                              size: 48, color: AppTheme.textSecondary.withAlpha(100)),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text('No EMIs yet',
+                            style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 6),
+                        const Text('Tap + to add your first EMI',
+                            style: TextStyle(
+                                color: AppTheme.textSecondary, fontSize: 14)),
+                      ],
+                    ),
+                  )
+                else
+                  ...state.emis.map((emi) => _EmiCard(
+                        emi: emi,
+                        onMarkPaid: () => ref
+                            .read(emiControllerProvider.notifier)
+                            .markPaid(emi.id!),
+                        onDelete: () => ref
+                            .read(emiControllerProvider.notifier)
+                            .deleteEmi(emi.id!),
+                      )),
+                const SizedBox(height: 20),
+                _SmartEmiAnalysis(emis: state.emis),
+              ],
             ),
     );
   }
@@ -465,6 +469,261 @@ class _EmiCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SmartEmiAnalysis extends StatelessWidget {
+  final List<Emi> emis;
+  const _SmartEmiAnalysis({required this.emis});
+
+  @override
+  Widget build(BuildContext context) {
+    final totalMonthly = emis.fold<int>(0, (s, e) => s + e.monthlyAmountMinor);
+    final totalRemaining = emis.fold<int>(0, (s, e) => s + e.remainingAmountMinor);
+    final activeCount = emis.where((e) => !e.isCompleted).length;
+    final paidCount = emis.where((e) => e.isCompleted).length;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.accent.withAlpha(40),
+            AppTheme.cardSurface.withAlpha(200),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.accent.withAlpha(60)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentGlass,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.auto_awesome,
+                    size: 16, color: AppTheme.accent),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Smart EMI Analysis',
+                        style: AppTheme.sectionTitle),
+                    Text('AI-powered insights',
+                        style: TextStyle(
+                            fontSize: 11, color: AppTheme.textSecondary)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentGlass,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text('PREMIUM',
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.accent,
+                        letterSpacing: 1)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _StatBox(
+                label: 'Monthly outflow',
+                value: Money.format(totalMonthly),
+                icon: Icons.trending_down,
+                color: AppTheme.expense,
+              ),
+              const SizedBox(width: 8),
+              _StatBox(
+                label: 'Remaining total',
+                value: Money.format(totalRemaining),
+                icon: Icons.account_balance,
+                color: AppTheme.warning,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _StatBox(
+                label: 'Active',
+                value: '$activeCount',
+                icon: Icons.schedule,
+                color: AppTheme.primary,
+              ),
+              const SizedBox(width: 8),
+              _StatBox(
+                label: 'Paid off',
+                value: '$paidCount',
+                icon: Icons.check_circle,
+                color: AppTheme.income,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.cardSurface.withAlpha(100),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Column(
+              children: [
+                _FeatureRow(
+                  icon: Icons.psychology,
+                  label: 'AI suggests optimal prepayment strategy',
+                ),
+                const SizedBox(height: 10),
+                _FeatureRow(
+                  icon: Icons.timeline,
+                  label: 'Forecast payoff dates & interest savings',
+                ),
+                const SizedBox(height: 10),
+                _FeatureRow(
+                  icon: Icons.compare_arrows,
+                  label: 'Compare refinancing options',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.accent.withAlpha(100),
+                  AppTheme.primary.withAlpha(100),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.accent.withAlpha(80)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 14, height: 14,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFFFD700), Color(0xFFDAA520)],
+                    ),
+                  ),
+                  child: const Center(
+                    child: Text('¢',
+                        style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white)),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Unlock with coins — launching soon',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatBox extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  const _StatBox({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.cardSurface.withAlpha(100),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withAlpha(40)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 14, color: color),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 11, color: AppTheme.textSecondary)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(value,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: AppTheme.textPrimary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FeatureRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _FeatureRow({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16,
+            color: AppTheme.textSecondary.withAlpha(120)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary.withAlpha(180))),
+        ),
+        Icon(Icons.lock_outline,
+            size: 14,
+            color: AppTheme.textSecondary.withAlpha(100)),
+      ],
     );
   }
 }

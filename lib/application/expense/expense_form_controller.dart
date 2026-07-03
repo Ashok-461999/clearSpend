@@ -4,6 +4,7 @@ import '../../core/category.dart';
 import '../../core/money.dart';
 import '../../domain/models/expense.dart';
 import '../../domain/repositories/expense_repository.dart';
+import '../coins/coin_controller.dart';
 
 class ExpenseFormState {
   final int? editingId;
@@ -48,8 +49,9 @@ class ExpenseFormState {
 
 class ExpenseFormController extends StateNotifier<ExpenseFormState> {
   final ExpenseRepository _repository;
+  final CoinController _coins;
 
-  ExpenseFormController(this._repository)
+  ExpenseFormController(this._repository, this._coins)
       : super(ExpenseFormState(date: DateTime.now()));
 
   void setAmount(String value) {
@@ -92,7 +94,7 @@ class ExpenseFormController extends StateNotifier<ExpenseFormState> {
     if (monthlyBudget > 0 && state.category != null && !state.category!.isIncome) {
       final newTotal = currentMonthExpense + amount;
       if (newTotal > monthlyBudget) {
-        state = state.copyWith(error: 'This expense exceeds your monthly budget! (\$${Money.format(monthlyBudget)})');
+        state = state.copyWith(error: 'This exceeds your monthly budget of ${Money.format(monthlyBudget)}');
         return false;
       }
     }
@@ -107,6 +109,9 @@ class ExpenseFormController extends StateNotifier<ExpenseFormState> {
         localDate: state.date,
         notes: state.notes.isNotEmpty ? state.notes : null,
       ));
+      if (state.editingId == null) {
+        _coins.onTransactionAdded();
+      }
       state = ExpenseFormState(date: DateTime.now());
       return true;
     } catch (e) {

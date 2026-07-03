@@ -5,26 +5,27 @@ class UserProfile {
   final String name;
   final String email;
   final int monthlyBudget;
-  final int initialBalance;
+  final String? imagePath;
 
   const UserProfile({
     this.name = 'User',
     this.email = '',
     this.monthlyBudget = 0,
-    this.initialBalance = 0,
+    this.imagePath,
   });
 
   UserProfile copyWith({
     String? name,
     String? email,
     int? monthlyBudget,
-    int? initialBalance,
+    String? imagePath,
+    bool clearImage = false,
   }) {
     return UserProfile(
       name: name ?? this.name,
       email: email ?? this.email,
       monthlyBudget: monthlyBudget ?? this.monthlyBudget,
-      initialBalance: initialBalance ?? this.initialBalance,
+      imagePath: clearImage ? null : (imagePath ?? this.imagePath),
     );
   }
 
@@ -85,7 +86,7 @@ class SettingsController extends StateNotifier<SettingsState> {
         name: _prefs.getString('profile_name') ?? 'User',
         email: _prefs.getString('profile_email') ?? '',
         monthlyBudget: _prefs.getInt('monthly_budget') ?? 0,
-        initialBalance: _prefs.getInt('initial_balance') ?? 0,
+        imagePath: _prefs.getString('profile_image'),
       ),
       currencyCode: _prefs.getString('currency_code') ?? 'INR',
       firstDayOfWeek: _prefs.getInt('first_day_of_week') ?? DateTime.monday,
@@ -96,9 +97,23 @@ class SettingsController extends StateNotifier<SettingsState> {
     _prefs.setString('profile_name', state.profile.name);
     _prefs.setString('profile_email', state.profile.email);
     _prefs.setInt('monthly_budget', state.profile.monthlyBudget);
-    _prefs.setInt('initial_balance', state.profile.initialBalance);
     _prefs.setString('currency_code', state.currencyCode);
     _prefs.setInt('first_day_of_week', state.firstDayOfWeek);
+    if (state.profile.imagePath != null) {
+      _prefs.setString('profile_image', state.profile.imagePath!);
+    } else {
+      _prefs.remove('profile_image');
+    }
+  }
+
+  void updateImage(String? path) {
+    state = state.copyWith(
+      profile: state.profile.copyWith(
+        imagePath: path,
+        clearImage: path == null,
+      ),
+    );
+    _saveToPrefs();
   }
 
   void updateProfile(UserProfile profile) {
@@ -123,13 +138,6 @@ class SettingsController extends StateNotifier<SettingsState> {
   void updateMonthlyBudget(int budget) {
     state = state.copyWith(
       profile: state.profile.copyWith(monthlyBudget: budget),
-    );
-    _saveToPrefs();
-  }
-
-  void updateInitialBalance(int balance) {
-    state = state.copyWith(
-      profile: state.profile.copyWith(initialBalance: balance),
     );
     _saveToPrefs();
   }

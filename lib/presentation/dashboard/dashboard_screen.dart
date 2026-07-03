@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../application/coins/coin_controller.dart';
 import '../../application/providers.dart';
 import '../../core/category.dart';
 import '../../core/money.dart';
@@ -15,45 +16,13 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(historyControllerProvider);
-    final monthExpenses = state.days.expand((d) => d.expenses).toList();
-
-    final totalExpenses = state.totalExpense;
-    final txCount = monthExpenses.length;
-    final remaining = ref.watch(remainingBalanceProvider);
-    final settings = ref.watch(settingsControllerProvider);
-    final profile = settings.profile;
-    final initialBalance = profile.initialBalance;
-    final totalIncome = state.totalIncome;
-    final monthlyBudget = profile.monthlyBudget;
-    final budgetProgress = ref.watch(budgetProgressProvider);
-    final budgetRemaining = ref.watch(budgetRemainingProvider);
-    final spendingScore = ref.watch(spendingScoreProvider);
-    final dailyAvg = ref.watch(dailyAverageProvider);
+    final coinState = ref.watch(coinControllerProvider);
     const months = [
       '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     final now = DateTime.now();
     final monthLabel = '${months[now.month]} ${now.year}';
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
-
-    final catTotals = <Category, int>{};
-    int wasted = 0;
-    for (final e in monthExpenses) {
-      if (e.isIncome) continue;
-      catTotals.update(
-          e.category, (v) => v + e.amountMinor, ifAbsent: () => e.amountMinor);
-      if (!e.category.isEssential) {
-        wasted += e.amountMinor;
-      }
-    }
-    final sortedCats = catTotals.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    final recent = monthExpenses.reversed.take(5).toList();
-    final essential = totalExpenses - wasted;
-    final netFlow = totalIncome - totalExpenses;
 
     return Scaffold(
       appBar: AppBar(
@@ -80,6 +49,56 @@ class DashboardScreen extends ConsumerWidget {
                     color: AppTheme.textSecondary)),
           ],
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningGlass,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 16,
+                        height: 16,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFFFFD700),
+                              Color(0xFFDAA520),
+                            ],
+                          ),
+                        ),
+                        child: const Center(
+                          child: Text('¢',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white)),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text('${coinState.balance}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: AppTheme.warning)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {},
@@ -87,62 +106,77 @@ class DashboardScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
           children: [
-            _PremiumSummary(total: totalExpenses, income: totalIncome, count: txCount),
+            const _PremiumSummary(),
             const SizedBox(height: 14),
-            _BalanceCard(
-              initialBalance: initialBalance,
-              spent: totalExpenses,
-              remaining: remaining,
-              netFlow: netFlow,
-            ),
-            if (monthlyBudget > 0) ...[
-              const SizedBox(height: 14),
-              _BudgetCard(
-                budget: monthlyBudget,
-                spent: totalExpenses,
-                remaining: budgetRemaining,
-                progress: budgetProgress,
-                daysInMonth: daysInMonth,
-                dailyAvg: dailyAvg,
-              ),
-            ],
+            const _BalanceCard(),
+            const SizedBox(height: 14),
+            const _BudgetCard(),
             const SizedBox(height: 20),
-            _SmartInsights(
-              essential: essential,
-              wasted: wasted,
-              total: totalExpenses,
-              budgetProgress: budgetProgress,
-              monthlyBudget: monthlyBudget,
-              spendingScore: spendingScore,
-              netFlow: netFlow,
-              txCount: txCount,
-            ),
+            const _SmartInsights(),
             const SizedBox(height: 20),
-            _SavingsGoalCard(ref: ref),
+            const _SavingsGoalCard(),
             const SizedBox(height: 20),
-            if (sortedCats.isNotEmpty) ...[
-              Text('Spending Breakdown', style: AppTheme.sectionTitle),
-              const SizedBox(height: 12),
-              ...sortedCats.map((e) => _CategoryBar(
-                  category: e.key, amount: e.value, total: totalExpenses)),
-              const SizedBox(height: 20),
-            ],
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Recent Activity', style: AppTheme.sectionTitle),
-                TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const HistoryScreen())),
-                  child: const Text('See All'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            if (recent.isEmpty)
-              _buildEmptyState()
-            else
-              ...recent.map((e) => _TransactionRow(expense: e)),
+            Consumer(builder: (context, ref, _) {
+              final state = ref.watch(historyControllerProvider);
+              final monthlyBudget = ref.watch(settingsControllerProvider).profile.monthlyBudget;
+              final expenses = state.days.expand((d) => d.expenses).toList();
+              return _SpendingStreakCard(
+                monthExpenses: expenses,
+                monthlyBudget: monthlyBudget,
+                daysInMonth: DateTime.now().day,
+              );
+            }),
+            const SizedBox(height: 20),
+            Consumer(builder: (context, ref, _) {
+              final coinState = ref.watch(coinControllerProvider);
+              return _CoinVaultCard(coinState: coinState);
+            }),
+            const SizedBox(height: 14),
+            Consumer(builder: (context, ref, _) {
+              final coinState = ref.watch(coinControllerProvider);
+              return _PremiumTeaserCard(coinBalance: coinState.balance);
+            }),
+            const SizedBox(height: 20),
+            Consumer(builder: (context, ref, _) {
+              final sortedCats = ref.watch(categoryTotalsProvider);
+              final total = ref.watch(historyControllerProvider).totalExpense;
+              if (sortedCats.isEmpty) return const SizedBox.shrink();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Spending Breakdown', style: AppTheme.sectionTitle),
+                  const SizedBox(height: 12),
+                  ...sortedCats.map((e) => _CategoryBar(
+                      category: e.key, amount: e.value, total: total)),
+                ],
+              );
+            }),
+            const SizedBox(height: 20),
+            Consumer(builder: (context, ref, _) {
+              final expenses = ref.watch(monthExpensesProvider);
+              final recent = expenses.reversed.take(5).toList();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Recent Activity', style: AppTheme.sectionTitle),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const HistoryScreen())),
+                        child: const Text('See All'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  if (recent.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ...recent.map((e) => _TransactionRow(expense: e)),
+                ],
+              );
+            }),
           ],
         ),
       ),
@@ -178,15 +212,16 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _PremiumSummary extends StatelessWidget {
-  final int total;
-  final int income;
-  final int count;
-  const _PremiumSummary(
-      {required this.total, required this.income, required this.count});
+class _PremiumSummary extends ConsumerWidget {
+  const _PremiumSummary();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(historyControllerProvider);
+    final total = state.totalExpense;
+    final income = state.totalIncome;
+    final count = state.days.fold<int>(0, (s, d) => s + d.expenses.length);
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -272,22 +307,21 @@ class _PremiumSummary extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
             children: [
               _StatChip(
                   icon: Icons.receipt, label: '$count transactions'),
-              const SizedBox(width: 10),
               if (total > 0)
                 _StatChip(
                     icon: Icons.trending_up,
                     label: 'Avg ${Money.format(total ~/ count)}'),
-              if (income > 0) ...[
-                const SizedBox(width: 10),
+              if (income > 0)
                 _StatChip(
                     icon: Icons.savings,
                     label: 'Net ${Money.format(income - total)}',
                     isIncome: (income - total) >= 0),
-              ],
             ],
           ),
         ],
@@ -327,20 +361,16 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-class _BalanceCard extends StatelessWidget {
-  final int initialBalance;
-  final int spent;
-  final int remaining;
-  final int netFlow;
-  const _BalanceCard({
-    required this.initialBalance,
-    required this.spent,
-    required this.remaining,
-    required this.netFlow,
-  });
+class _BalanceCard extends ConsumerWidget {
+  const _BalanceCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final balanceAsync = ref.watch(accountBalanceProvider);
+    final balance = balanceAsync.asData?.value ?? 0;
+    final state = ref.watch(historyControllerProvider);
+    final spent = state.totalExpense;
+    final netFlow = state.totalIncome - state.totalExpense;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -362,7 +392,7 @@ class _BalanceCard extends StatelessWidget {
                     size: 16, color: AppTheme.primary),
               ),
               const SizedBox(width: 10),
-              const Text('Balance Overview', style: AppTheme.sectionTitle),
+              const Text('Account', style: AppTheme.sectionTitle),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -386,9 +416,9 @@ class _BalanceCard extends StatelessWidget {
             children: [
               Expanded(
                   child: _BalanceLabel(
-                      label: 'Initial',
-                      amount: Money.format(initialBalance),
-                      color: AppTheme.primary)),
+                      label: 'Balance',
+                      amount: Money.format(balance),
+                      color: balance >= 0 ? AppTheme.income : AppTheme.expense)),
               const SizedBox(width: 10),
               Expanded(
                   child: _BalanceLabel(
@@ -398,9 +428,9 @@ class _BalanceCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                   child: _BalanceLabel(
-                      label: 'Remaining',
-                      amount: Money.format(remaining),
-                      color: remaining >= 0 ? AppTheme.income : AppTheme.expense)),
+                      label: 'Saved',
+                      amount: Money.format(netFlow),
+                      color: netFlow >= 0 ? AppTheme.income : AppTheme.expense)),
             ],
           ),
         ],
@@ -409,25 +439,18 @@ class _BalanceCard extends StatelessWidget {
   }
 }
 
-class _BudgetCard extends StatelessWidget {
-  final int budget;
-  final int spent;
-  final int remaining;
-  final double progress;
-  final int daysInMonth;
-  final int dailyAvg;
-
-  const _BudgetCard({
-    required this.budget,
-    required this.spent,
-    required this.remaining,
-    required this.progress,
-    required this.daysInMonth,
-    required this.dailyAvg,
-  });
+class _BudgetCard extends ConsumerWidget {
+  const _BudgetCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final budget = ref.watch(settingsControllerProvider).profile.monthlyBudget;
+    final spent = ref.watch(historyControllerProvider).totalExpense;
+    final remaining = ref.watch(budgetRemainingProvider);
+    final progress = ref.watch(budgetProgressProvider);
+    final dailyAvg = ref.watch(dailyAverageProvider);
+
+    if (budget <= 0) return const SizedBox.shrink();
     final overBudget = spent > budget;
     final pct = (progress * 100).round().clamp(0, 200);
     return Container(
@@ -538,48 +561,60 @@ class _BudgetCard extends StatelessWidget {
   }
 }
 
-class _SmartInsights extends StatelessWidget {
-  final int essential;
-  final int wasted;
-  final int total;
-  final double budgetProgress;
-  final int monthlyBudget;
-  final int spendingScore;
-  final int netFlow;
-  final int txCount;
-
-  const _SmartInsights({
-    required this.essential,
-    required this.wasted,
-    required this.total,
-    required this.budgetProgress,
-    required this.monthlyBudget,
-    required this.spendingScore,
-    required this.netFlow,
-    required this.txCount,
-  });
-
-  String get _scoreLabel {
-    if (spendingScore >= 90) return 'Excellent';
-    if (spendingScore >= 75) return 'Good';
-    if (spendingScore >= 50) return 'Fair';
-    return 'Needs Attention';
-  }
-
-  Color get _scoreColor {
-    if (spendingScore >= 90) return AppTheme.income;
-    if (spendingScore >= 75) return AppTheme.primary;
-    if (spendingScore >= 50) return AppTheme.warning;
-    return AppTheme.expense;
-  }
-
-  int get _wastePct => total > 0 ? (wasted / total * 100).round() : 0;
-  int get _essentialPct => 100 - _wastePct;
+class _SmartInsights extends ConsumerWidget {
+  const _SmartInsights();
 
   @override
-  Widget build(BuildContext context) {
-    final wastePct = _wastePct;
-    final essentialPct = _essentialPct;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(historyControllerProvider);
+    final total = state.totalExpense;
+    final wasted = ref.watch(wastedTotalProvider);
+    final essential = total - wasted;
+    final budgetProgress = ref.watch(budgetProgressProvider);
+    final spendingScore = ref.watch(spendingScoreProvider);
+    final netFlow = state.totalIncome - state.totalExpense;
+    final monthlyBudget = ref.watch(settingsControllerProvider).profile.monthlyBudget;
+    final txCount = state.days.fold<int>(0, (s, d) => s + d.expenses.length);
+
+    final scoreLabel = spendingScore >= 90 ? 'Excellent' : spendingScore >= 75 ? 'Good' : spendingScore >= 50 ? 'Fair' : 'Needs Attention';
+    final scoreColor = spendingScore >= 90 ? AppTheme.income : spendingScore >= 75 ? AppTheme.primary : spendingScore >= 50 ? AppTheme.warning : AppTheme.expense;
+    final wastePct = total > 0 ? (wasted / total * 100).round() : 0;
+    final essentialPct = 100 - wastePct;
+
+    String buildPrimaryInsight() {
+      if (total == 0) return 'No spending yet this month. Start tracking to get insights!';
+      final msgs = <String>[];
+      if (monthlyBudget > 0) {
+        if (budgetProgress >= 1.0) {
+          msgs.add('You\'ve exceeded your monthly budget.');
+        } else if (budgetProgress >= 0.75) {
+          msgs.add('You\'ve used ${(budgetProgress * 100).round()}% of your budget.');
+        } else {
+          msgs.add('On track with ${((1 - budgetProgress) * 100).round()}% budget remaining.');
+        }
+      }
+      if (wastePct > 50) {
+        msgs.add('$wastePct% of spending is discretionary.');
+      } else if (essentialPct > 70) {
+        msgs.add('$essentialPct% goes to essentials — good discipline.');
+      }
+      if (netFlow < 0) {
+        msgs.add('Spending exceeds income by ${Money.format(-netFlow)}.');
+      } else if (netFlow > 0 && total > 0) {
+        msgs.add('Saving ${Money.format(netFlow)} this month.');
+      }
+      return msgs.isEmpty ? 'Balanced spending this month.' : msgs.join(' ');
+    }
+
+    String buildTip() {
+      if (total == 0) return 'Set a monthly budget in Settings to track your limits.';
+      if (monthlyBudget <= 0) return 'Set a monthly budget in Settings to stay on track.';
+      if (budgetProgress >= 0.9) return 'You\'re close to your budget limit! Consider pausing non-essential spending.';
+      if (wastePct > 60) return 'Try cutting discretionary spending to save more.';
+      if (netFlow < 0) return 'Look for ways to reduce expenses or increase income.';
+      if (txCount > 30) return 'You\'re tracking frequently — great habit!';
+      return 'Keep up the good financial discipline!';
+    }
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -596,10 +631,10 @@ class _SmartInsights extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: _scoreColor.withAlpha(25),
+                  color: scoreColor.withAlpha(25),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.auto_awesome, size: 16, color: _scoreColor),
+                child: Icon(Icons.auto_awesome, size: 16, color: scoreColor),
               ),
               const SizedBox(width: 10),
               const Text('Smart Insights', style: AppTheme.sectionTitle),
@@ -607,19 +642,19 @@ class _SmartInsights extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _scoreColor.withAlpha(25),
+                  color: scoreColor.withAlpha(25),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.speed, size: 13, color: _scoreColor),
+                    Icon(Icons.speed, size: 13, color: scoreColor),
                     const SizedBox(width: 4),
                     Text('Score $spendingScore',
                         style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: _scoreColor)),
+                            color: scoreColor)),
                   ],
                 ),
               ),
@@ -628,7 +663,7 @@ class _SmartInsights extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              _ScoreRing(score: spendingScore, label: _scoreLabel),
+              _ScoreRing(score: spendingScore, label: scoreLabel),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -636,12 +671,12 @@ class _SmartInsights extends StatelessWidget {
                   children: [
                     _InsightTile(
                       icon: Icons.insights,
-                      text: _buildPrimaryInsight(),
+                      text: buildPrimaryInsight(),
                     ),
                     const SizedBox(height: 8),
                     _InsightTile(
                       icon: Icons.tips_and_updates,
-                      text: _buildTip(),
+                      text: buildTip(),
                     ),
                   ],
                 ),
@@ -700,40 +735,6 @@ class _SmartInsights extends StatelessWidget {
     );
   }
 
-  String _buildPrimaryInsight() {
-    if (total == 0) return 'No spending yet this month. Start tracking to get insights!';
-    final msgs = <String>[];
-    if (monthlyBudget > 0) {
-      if (budgetProgress >= 1.0) {
-        msgs.add('You\'ve exceeded your monthly budget.');
-      } else if (budgetProgress >= 0.75) {
-        msgs.add('You\'ve used ${(budgetProgress * 100).round()}% of your budget.');
-      } else {
-        msgs.add('On track with ${((1 - budgetProgress) * 100).round()}% budget remaining.');
-      }
-    }
-    if (_wastePct > 50) {
-      msgs.add('${_wastePct}% of spending is discretionary.');
-    } else if (_essentialPct > 70) {
-      msgs.add('${_essentialPct}% goes to essentials — good discipline.');
-    }
-    if (netFlow < 0) {
-      msgs.add('Spending exceeds income by ${Money.format(-netFlow)}.');
-    } else if (netFlow > 0 && total > 0) {
-      msgs.add('Saving ${Money.format(netFlow)} this month.');
-    }
-    return msgs.isEmpty ? 'Balanced spending this month.' : msgs.join(' ');
-  }
-
-  String _buildTip() {
-    if (total == 0) return 'Set a monthly budget in Settings to track your limits.';
-    if (monthlyBudget <= 0) return 'Set a monthly budget in Settings to stay on track.';
-    if (budgetProgress >= 0.9) return 'You\'re close to your budget limit! Consider pausing non-essential spending.';
-    if (_wastePct > 60) return 'Try cutting discretionary spending to save more.';
-    if (netFlow < 0) return 'Look for ways to reduce expenses or increase income.';
-    if (txCount > 30) return 'You\'re tracking frequently — great habit!';
-    return 'Keep up the good financial discipline!';
-  }
 }
 
 class _ScoreRing extends StatelessWidget {
@@ -804,8 +805,7 @@ class _InsightTile extends StatelessWidget {
 }
 
 class _SavingsGoalCard extends ConsumerWidget {
-  final WidgetRef ref;
-  const _SavingsGoalCard({required this.ref});
+  const _SavingsGoalCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -909,6 +909,474 @@ class _SavingsGoalCard extends ConsumerWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _SpendingStreakCard extends StatelessWidget {
+  final List<Expense> monthExpenses;
+  final int monthlyBudget;
+  final int daysInMonth;
+  const _SpendingStreakCard({
+    required this.monthExpenses,
+    required this.monthlyBudget,
+    required this.daysInMonth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dailyBudget = monthlyBudget > 0 ? monthlyBudget ~/ daysInMonth : 0;
+    if (dailyBudget <= 0) return const SizedBox.shrink();
+
+    final dailyTotals = <DateTime, int>{};
+    for (final e in monthExpenses) {
+      if (e.isIncome) continue;
+      final day = DateTime(e.localDate.year, e.localDate.month, e.localDate.day);
+      dailyTotals.update(day, (v) => v + e.amountMinor, ifAbsent: () => e.amountMinor);
+    }
+
+    final today = DateTime.now();
+    int streak = 0;
+    for (int i = 0; i < daysInMonth; i++) {
+      final day = DateTime(today.year, today.month, today.day).subtract(Duration(days: i));
+      if (day.month != today.month) break;
+      final spent = dailyTotals[day] ?? 0;
+      if (spent <= dailyBudget) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+
+    if (streak == 0) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardSurface.withAlpha(180),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.primary.withAlpha(40)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.warningGlass,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.local_fire_department,
+                size: 20, color: AppTheme.warning),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$streak day${streak == 1 ? '' : 's'} streak!',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: AppTheme.textPrimary)),
+                const SizedBox(height: 2),
+                Text(
+                  streak == 1
+                      ? 'You stayed under budget yesterday'
+                      : 'Consecutive days under budget',
+                  style: TextStyle(
+                      fontSize: 12, color: AppTheme.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppTheme.warningGlass,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text('🔥 $streak',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: AppTheme.warning)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CoinVaultCard extends StatelessWidget {
+  final CoinState coinState;
+  const _CoinVaultCard({required this.coinState});
+
+  @override
+  Widget build(BuildContext context) {
+    final streakBonus = (coinState.loginStreak * 5).clamp(5, 50);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.warning.withAlpha(30),
+            AppTheme.cardSurface.withAlpha(180),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.warning.withAlpha(60)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.warningGlass,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.account_balance_wallet_rounded,
+                    size: 16, color: AppTheme.warning),
+              ),
+              const SizedBox(width: 10),
+              const Text('CoinVault', style: AppTheme.sectionTitle),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppTheme.warningGlass,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 16,
+                      height: 16,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFFFD700),
+                            Color(0xFFDAA520),
+                          ],
+                        ),
+                      ),
+                      child: const Center(
+                        child: Text('¢',
+                            style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white)),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text('${coinState.balance}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            color: AppTheme.warning)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _EarnTile(
+                  icon: Icons.login,
+                  label: 'Login streak',
+                  value: 'Day ${coinState.loginStreak}',
+                  bonus: '+$streakBonus',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _EarnTile(
+                  icon: Icons.receipt,
+                  label: 'Today',
+                  value: '${coinState.transactionsToday}/10 tx',
+                  bonus: coinState.transactionsToday < 10 ? '+2 each' : 'maxed',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _EarnTile(
+                  icon: Icons.trending_down,
+                  label: 'Budget streak',
+                  value: '${coinState.budgetStreak} day${coinState.budgetStreak == 1 ? '' : 's'}',
+                  bonus: coinState.budgetStreak >= 7
+                      ? '🔥 ${coinState.budgetStreak >= 30 ? "200" : "50"}'
+                      : '+5/day',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _EarnTile(
+                  icon: Icons.auto_awesome,
+                  label: 'Premium AI',
+                  value: 'Coming soon',
+                  bonus: 'unlock',
+                  isLocked: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EarnTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String bonus;
+  final bool isLocked;
+
+  const _EarnTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.bonus,
+    this.isLocked = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isLocked
+            ? AppTheme.cardSurface.withAlpha(100)
+            : AppTheme.cardGlass,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isLocked ? AppTheme.border : AppTheme.warning.withAlpha(40),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon,
+                  size: 14,
+                  color: isLocked
+                      ? AppTheme.textSecondary
+                      : AppTheme.warning),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isLocked
+                            ? AppTheme.textSecondary
+                            : AppTheme.textPrimary)),
+              ),
+              if (isLocked)
+                const Icon(Icons.lock_outline,
+                    size: 12, color: AppTheme.textSecondary),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: isLocked
+                      ? AppTheme.textSecondary
+                      : AppTheme.textPrimary)),
+          Text('$bonus coins',
+              style: TextStyle(
+                  fontSize: 10,
+                  color: isLocked
+                      ? AppTheme.textSecondary.withAlpha(120)
+                      : AppTheme.warning)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumTeaserCard extends StatelessWidget {
+  final int coinBalance;
+  const _PremiumTeaserCard({required this.coinBalance});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.accent.withAlpha(40),
+            AppTheme.cardSurface.withAlpha(180),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.accent.withAlpha(60)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentGlass,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.auto_awesome,
+                    size: 16, color: AppTheme.accent),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('AI Analytics',
+                        style: AppTheme.sectionTitle),
+                    Text('Smart expense management',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.textSecondary)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentGlass,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text('PREMIUM',
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.accent,
+                        letterSpacing: 1)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.cardSurface.withAlpha(100),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Column(
+              children: [
+                _FeatureRow(
+                    icon: Icons.psychology,
+                    label: 'AI Spending Predictions',
+                    locked: true),
+                const SizedBox(height: 8),
+                _FeatureRow(
+                    icon: Icons.trending_up,
+                    label: 'Smart Budget Recommendations',
+                    locked: true),
+                const SizedBox(height: 8),
+                _FeatureRow(
+                    icon: Icons.notifications_active,
+                    label: 'Intelligent Bill Reminders',
+                    locked: true),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.accent.withAlpha(100),
+                    AppTheme.primary.withAlpha(100),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.accent.withAlpha(80)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.lock_open,
+                      size: 14, color: AppTheme.accent),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Coming soon — save coins to unlock',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool locked;
+  const _FeatureRow({
+    required this.icon,
+    required this.label,
+    this.locked = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16,
+            color: locked
+                ? AppTheme.textSecondary.withAlpha(120)
+                : AppTheme.accent),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 13,
+                  color: locked
+                      ? AppTheme.textSecondary.withAlpha(180)
+                      : AppTheme.textPrimary)),
+        ),
+        Icon(
+          locked ? Icons.lock_outline : Icons.check_circle,
+          size: 14,
+          color: locked ? AppTheme.textSecondary.withAlpha(100) : AppTheme.income,
+        ),
+      ],
     );
   }
 }
@@ -1151,17 +1619,32 @@ class _TransactionRow extends ConsumerWidget {
                         ? AppTheme.income
                         : AppTheme.expense),
               ),
-              if (expense.isIncome)
-                Container(
-                  margin: const EdgeInsets.only(left: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: () => _edit(context, ref),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AppTheme.incomeGlass,
-                    borderRadius: BorderRadius.circular(6),
+                    color: AppTheme.cardGlass,
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text('IN',
-                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppTheme.income)),
+                  child: Icon(Icons.edit_outlined,
+                      size: 14, color: AppTheme.textSecondary),
                 ),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: () => _delete(context, ref),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.expenseGlass,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.delete_outline,
+                      size: 14, color: AppTheme.expense),
+                ),
+              ),
             ],
           ),
         ),

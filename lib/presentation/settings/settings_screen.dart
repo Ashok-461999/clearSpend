@@ -1,5 +1,11 @@
+import 'dart:io';
+
+import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../application/providers.dart';
 import '../../application/settings/settings_controller.dart';
@@ -29,14 +35,13 @@ class SettingsScreen extends ConsumerWidget {
         children: [
           _ProfileCard(
             profile: profile,
+            onEditImage: () => _pickImage(context, ref),
             onEditName: () =>
                 _editName(context, notifier, profile.name),
             onEditEmail: () =>
                 _editEmail(context, notifier, profile.email),
             onEditBudget: () => _editBudget(
                 context, notifier, profile.monthlyBudget),
-            onEditBalance: () => _editInitialBalance(
-                context, notifier, profile.initialBalance),
           ),
           const SizedBox(height: 24),
           _Section(
@@ -79,7 +84,7 @@ class SettingsScreen extends ConsumerWidget {
           _Section(
             title: 'DATA',
             children: [
-              _ExportTile(ref: ref),
+              const _ExportTile(),
               _ResetTile(ref: ref),
             ],
           ),
@@ -90,12 +95,7 @@ class SettingsScreen extends ConsumerWidget {
               _Tile(
                 icon: Icons.info_outline,
                 title: 'Version',
-                subtitle: '0.1.0',
-              ),
-              _Tile(
-                icon: Icons.code,
-                title: 'Built with Flutter',
-                subtitle: 'ClearSpend • Premium Finance Tracker',
+                subtitle: '1.0.0',
               ),
             ],
           ),
@@ -202,39 +202,104 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _editInitialBalance(
-      BuildContext context, SettingsController notifier, int current) {
-    final strVal =
-        current > 0 ? (current / 100).toStringAsFixed(0) : '';
-    final controller = TextEditingController(text: strVal);
-    showDialog(
+  Future<void> _pickImage(BuildContext context, WidgetRef ref) async {
+    final picker = ImagePicker();
+    final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      builder: (ctx) => _StyledDialog(
-        title: 'Initial Balance',
-        child: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(color: AppTheme.textPrimary),
-          decoration: _inputDec('Enter initial balance', prefix: '₹ '),
+      backgroundColor: AppTheme.cardSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.textSecondary.withAlpha(80),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text('Profile Picture',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary)),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _sourceOption(
+                    icon: Icons.camera_alt,
+                    label: 'Camera',
+                    onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _sourceOption(
+                    icon: Icons.photo_library,
+                    label: 'Gallery',
+                    onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                  ),
+                ),
+              ],
+            ),
+            if (ref.read(settingsControllerProvider).profile.imagePath != null) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    ref.read(settingsControllerProvider.notifier).updateImage(null);
+                    Navigator.pop(ctx);
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('Remove photo'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.expense,
+                    side: const BorderSide(color: AppTheme.expense),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              notifier.updateInitialBalance(0);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Remove'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final v = Money.parseToMinor(controller.text.trim());
-              if (v != null) notifier.updateInitialBalance(v);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Save'),
-          ),
-        ],
+      ),
+    );
+    if (source == null) return;
+    final picked = await picker.pickImage(source: source, maxWidth: 512, maxHeight: 512);
+    if (picked != null) {
+      ref.read(settingsControllerProvider.notifier).updateImage(picked.path);
+    }
+  }
+
+  Widget _sourceOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        decoration: BoxDecoration(
+          color: AppTheme.cardGlass,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 32, color: AppTheme.primary),
+            const SizedBox(height: 8),
+            Text(label,
+                style: const TextStyle(
+                    color: AppTheme.textPrimary, fontSize: 13)),
+          ],
+        ),
       ),
     );
   }
@@ -328,16 +393,16 @@ class _StyledDialog extends StatelessWidget {
 
 class _ProfileCard extends StatelessWidget {
   final UserProfile profile;
+  final VoidCallback onEditImage;
   final VoidCallback onEditName;
   final VoidCallback onEditEmail;
   final VoidCallback onEditBudget;
-  final VoidCallback onEditBalance;
   const _ProfileCard({
     required this.profile,
+    required this.onEditImage,
     required this.onEditName,
     required this.onEditEmail,
     required this.onEditBudget,
-    required this.onEditBalance,
   });
 
   @override
@@ -362,14 +427,39 @@ class _ProfileCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 44,
-            backgroundColor: AppTheme.primaryGlass,
-            child: Text(profile.initials,
-                style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.primary)),
+          GestureDetector(
+            onTap: onEditImage,
+            child: Stack(
+              children: [
+                CircleAvatar(
+                  radius: 44,
+                  backgroundColor: AppTheme.primaryGlass,
+                  backgroundImage: profile.imagePath != null
+                      ? FileImage(File(profile.imagePath!))
+                      : null,
+                  child: profile.imagePath == null
+                      ? Text(profile.initials,
+                          style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.primary))
+                      : null,
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: AppTheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.camera_alt,
+                        size: 14, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 14),
           GestureDetector(
@@ -409,14 +499,6 @@ class _ProfileCard extends StatelessWidget {
                 ? 'Budget: ${Money.format(profile.monthlyBudget)}/mo'
                 : 'Set monthly budget',
             onTap: onEditBudget,
-          ),
-          const SizedBox(height: 10),
-          _buildAction(
-            icon: Icons.monetization_on_outlined,
-            text: profile.initialBalance > 0
-                ? 'Balance: ${Money.format(profile.initialBalance)}'
-                : 'Set initial balance',
-            onTap: onEditBalance,
           ),
         ],
       ),
@@ -970,22 +1052,65 @@ class _SavingsGoalTile extends StatelessWidget {
   }
 }
 
-class _ExportTile extends StatelessWidget {
-  final WidgetRef ref;
-  const _ExportTile({required this.ref});
+class _ExportTile extends ConsumerWidget {
+  const _ExportTile();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return _Tile(
       icon: Icons.file_download_outlined,
       title: 'Export Data',
       subtitle: 'Download your expenses as CSV',
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Export feature coming soon')),
-        );
-      },
+      onTap: () => _export(context, ref),
     );
+  }
+
+  Future<void> _export(BuildContext context, WidgetRef ref) async {
+    try {
+      final repo = ref.read(expenseRepositoryProvider);
+      final all = await repo.watchInRange(
+        start: DateTime(2000),
+        end: DateTime(2100),
+      ).first;
+
+      if (all.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No expenses to export')),
+          );
+        }
+        return;
+      }
+
+      all.sort((a, b) => b.dateUtc.compareTo(a.dateUtc));
+
+      final rows = <List<String>>[
+        ['Date', 'Category', 'Type', 'Amount', 'Notes'],
+        for (final e in all)
+          [
+            '${e.localDate.year}-${e.localDate.month.toString().padLeft(2, '0')}-${e.localDate.day.toString().padLeft(2, '0')}',
+            e.category.label,
+            e.isIncome ? 'Income' : 'Expense',
+            (e.amountMinor / 100).toStringAsFixed(2),
+            e.notes ?? '',
+          ],
+      ];
+
+      final csv = const ListToCsvConverter().convert(rows);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/moneymate_export.csv');
+      await file.writeAsString(csv);
+
+      if (context.mounted) {
+        await Share.shareXFiles([XFile(file.path)], text: 'MoneyMate Export');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e')),
+        );
+      }
+    }
   }
 }
 

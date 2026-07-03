@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/category.dart';
 import '../core/date_range.dart';
 import '../data/repositories/isar_emi_repository.dart';
 import '../data/repositories/isar_expense_repository.dart';
+import '../domain/models/expense.dart';
 import '../domain/repositories/emi_repository.dart';
 import '../domain/repositories/expense_repository.dart';
+import 'coins/coin_controller.dart';
 import 'emi/emi_controller.dart';
 import 'expense/expense_form_controller.dart';
 import 'history/history_controller.dart';
@@ -24,7 +27,10 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
 
 final expenseFormControllerProvider =
     StateNotifierProvider<ExpenseFormController, ExpenseFormState>((ref) {
-  return ExpenseFormController(ref.watch(expenseRepositoryProvider));
+  return ExpenseFormController(
+    ref.watch(expenseRepositoryProvider),
+    ref.watch(coinControllerProvider.notifier),
+  );
 });
 
 final historyControllerProvider =
@@ -85,10 +91,15 @@ final settingsControllerProvider =
   return SettingsController(prefs);
 });
 
-final remainingBalanceProvider = Provider<int>((ref) {
-  final historyState = ref.watch(historyControllerProvider);
-  final settings = ref.watch(settingsControllerProvider);
-  return settings.profile.initialBalance + historyState.totalIncome - historyState.totalExpense;
+final accountBalanceProvider = StreamProvider<int>((ref) {
+  final repo = ref.watch(expenseRepositoryProvider);
+  final start = DateTime(2000);
+  final end = DateTime(2100);
+  return repo.watchInRange(start: start, end: end).map((expenses) {
+    final income = expenses.where((e) => e.isIncome).fold<int>(0, (sum, e) => sum + e.amountMinor);
+    final expense = expenses.where((e) => !e.isIncome).fold<int>(0, (sum, e) => sum + e.amountMinor);
+    return income - expense;
+  });
 });
 
 final budgetProgressProvider = Provider<double>((ref) {
@@ -132,4 +143,36 @@ final projectedMonthEndProvider = Provider<int>((ref) {
 final savingsGoalProvider = StateProvider<int>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   return prefs.getInt('savings_goal') ?? 0;
+});
+
+final coinControllerProvider =
+    StateNotifierProvider<CoinController, CoinState>((ref) {
+  return CoinController(ref.watch(sharedPreferencesProvider));
+});
+
+final monthExpensesProvider = Provider<List<Expense>>((ref) {
+  final state = ref.watch(historyControllerProvider);
+  return state.days.expand((d) => d.expenses).toList();
+});
+
+final categoryTotalsProvider = Provider<List<MapEntry<Category, int>>>((ref) {
+  final expenses = ref.watch(monthExpensesProvider);
+  final totals = <Category, int>{};
+  for (final e in expenses) {
+    if (e.isIncome) continue;
+    totals.update(e.category, (v) => v + e.amountMinor, ifAbsent: () => e.amountMinor);
+  }
+  final sorted = totals.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  return sorted;
+});
+
+final wastedTotalProvider = Provider<int>((ref) {
+  final expenses = ref.watch(monthExpensesProvider);
+  int wasted = 0;
+  for (final e in expenses) {
+    if (e.isIncome) continue;
+    if (!e.category.isEssential) wasted += e.amountMinor;
+  }
+  return wasted;
 });
