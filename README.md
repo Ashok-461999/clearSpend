@@ -1,111 +1,75 @@
 <div align="center">
   <img src="assets/app_icon.png" width="96" height="96" alt="ClearSpend logo"/>
   <h1>ClearSpend</h1>
-  <p><strong>Offline-first personal expense tracker</strong></p>
-  <p>
-    <img src="https://img.shields.io/badge/Flutter-3.19%2B-14B8A6?logo=flutter" alt="Flutter"/>
-    <img src="https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Web%20%7C%20Desktop-8B5CF6" alt="Platform"/>
-    <img src="https://img.shields.io/badge/Storage-Isar%20(local)-22C55E" alt="Storage"/>
-    <img src="https://img.shields.io/badge/State-Riverpod-4D96FF" alt="State"/>
-  </p>
+  <p><strong>Your personal expense tracker — works offline, no sign-up needed</strong></p>
 </div>
 
 ---
 
-## Features
+## What is this?
 
-- **Track expenses & income** — Add transactions with categories, notes, and amounts
-- **Dashboard** — See your balance, recent spending, and quick stats at a glance
-- **Monthly history** — Browse transactions grouped by day with running balance
-- **Category breakdown** — Visual analysis of where your money goes
-- **Recurring EMIs** — Track recurring payments and bills
-- **Dark & Light themes** — Switch between dark/light/system theme
-- **100% offline** — All data stored locally. No accounts, no cloud, no sign-up
+ClearSpend is a simple expense tracker that runs entirely on your phone/computer. No internet needed, no account to create, no data sent anywhere. Just you and your money.
 
-## Tech Stack
+Add expenses, track your income, see where your money goes each month — all stored locally on your device.
 
-| Layer | Technology |
-|-------|-----------|
-| **UI** | Flutter 3.19+ (Material 3) |
-| **State** | Riverpod (StateNotifier + Providers) |
-| **Database** | Isar (NoSQL, embedded) |
-| **Persistence** | SharedPreferences (settings) |
-| **Fonts** | Google Fonts (Inter) |
-| **Architecture** | Feature-first, layered (data → domain → application → presentation) |
+## What can you do with it?
 
-## Architecture
+- **Log expenses & income** — Pick a category, enter an amount, add a note if you want
+- **Dashboard** — Quick look at your balance and recent spending
+- **Monthly history** — Scroll through your transactions day by day
+- **Analytics** — See which categories eat up most of your money
+- **Recurring payments** — Track EMIs and subscriptions that repeat every month
+- **Dark / Light mode** — Whatever you prefer
+- **Works everywhere** — Android, iOS, Web, Windows, Linux, macOS
 
-```
-lib/
-├── core/              # Shared utilities (money, category, theme, dates)
-├── domain/            # Pure Dart entities & repository interfaces
-├── data/              # Isar persistence & repository implementations
-├── application/       # Riverpod controllers & providers (business logic)
-└── presentation/      # Flutter widgets (UI only, no business logic)
-```
-
-**Dependency rule:** `presentation → application → domain ← data`
-- Domain is pure Dart — no framework dependency
-- Data layer implements domain interfaces
-- Swap storage backend by implementing domain interfaces (no UI changes needed)
-
-## Screenshots
+## How it looks
 
 | Dashboard | History | Analysis |
 |:---------:|:-------:|:--------:|
 | *Coming soon* | *Coming soon* | *Coming soon* |
 
-## Getting Started
-
-### Prerequisites
-- Flutter SDK 3.19.0+
-- Dart 3.3.0+
-
-### Run
+## Getting started
 
 ```bash
-# Clone the repository
 git clone https://github.com/Ashok-461999/clearSpend.git
 cd clearSpend
-
-# Get dependencies
 flutter pub get
-
-# Generate Isar code
 dart run build_runner build
-
-# Run the app
 flutter run
 ```
 
-### Build
+To build a release version:
 
 ```bash
-# Android APK
-flutter build apk --release
-
-# iOS
-flutter build ios --release
-
-# Web
-flutter build web --release
-
-# Windows
-flutter build windows --release
-
-# Linux
-flutter build linux --release
-
-# macOS
-flutter build macos --release
+flutter build apk --release        # Android
+flutter build ios --release        # iOS
+flutter build web --release        # Web
+flutter build windows --release    # Windows
+flutter build linux --release      # Linux
+flutter build macos --release      # macOS
 ```
 
-## Data Model
+## A bit about how it's built
 
-- **Money** stored as `int` minor units (paise/kopeck/cents) — never `double`
-- **Dates** stored as UTC, grouped by local date at read time
-- **Categories** stored as enum index — append-only ordering (new categories added at end)
+Built with Flutter, uses Riverpod for state management and Isar for local storage.
 
-## License
+The code is organized so it's easy to swap storage later — the UI never talks to the database directly.
 
-Built with Flutter. ClearSpend — Premium Finance Tracker.
+```
+lib/
+├── core/           # Shared stuff (categories, theme, money formatting)
+├── domain/         # What things look like (expense, category, etc.)
+├── data/           # Where things are stored (Isar database)
+├── application/    # Logic that connects UI and data
+└── presentation/   # The screens and widgets you see
+```
+
+## A note about data
+
+- Money amounts are stored as whole numbers (paise/cents) — no floating point decimals
+- Dates are stored in UTC but shown in your local timezone
+- New categories are always added at the end so existing data stays safe
+
+---
+
+Made with Flutter.
