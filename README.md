@@ -1,40 +1,111 @@
-# MoneyMate
+<div align="center">
+  <img src="assets/app_icon.png" width="96" height="96" alt="ClearSpend logo"/>
+  <h1>ClearSpend</h1>
+  <p><strong>Offline-first personal expense tracker</strong></p>
+  <p>
+    <img src="https://img.shields.io/badge/Flutter-3.19%2B-14B8A6?logo=flutter" alt="Flutter"/>
+    <img src="https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Web%20%7C%20Desktop-8B5CF6" alt="Platform"/>
+    <img src="https://img.shields.io/badge/Storage-Isar%20(local)-22C55E" alt="Storage"/>
+    <img src="https://img.shields.io/badge/State-Riverpod-4D96FF" alt="State"/>
+  </p>
+</div>
 
-Offline-first personal expense tracker. v1 scope: **expense tracking + history**,
-local storage only (Isar). No backend, no auth, no cloud.
+---
 
-## Architecture (layered + repository + Riverpod DI)
+## Features
 
-    presentation/   dumb widgets — render state, fire intents
-        |  depends on
-    application/    Riverpod DI + viewmodels (state, validation, projections)
-        |  depends on
-    domain/         pure entities + repository INTERFACE (Isar-free)
-        ^  implemented by
-    data/           Isar persistence model + repository implementation
-    core/           shared, dependency-free (money, category, theme, dates)
+- **Track expenses & income** — Add transactions with categories, notes, and amounts
+- **Dashboard** — See your balance, recent spending, and quick stats at a glance
+- **Monthly history** — Browse transactions grouped by day with running balance
+- **Category breakdown** — Visual analysis of where your money goes
+- **Recurring EMIs** — Track recurring payments and bills
+- **Dark & Light themes** — Switch between dark/light/system theme
+- **100% offline** — All data stored locally. No accounts, no cloud, no sign-up
 
-Dependency rule: arrows point inward to `domain`. `data` implements the
-domain interface; `presentation` never imports Isar.
+## Tech Stack
 
-### The swap seam
-`domain/repositories/expense_repository.dart` is an interface.
-Today: `IsarExpenseRepository`. Later (cloud/DB/API): add a new class
-implementing the same interface and rebind it in `application/providers.dart`.
-Nothing above the data layer changes.
+| Layer | Technology |
+|-------|-----------|
+| **UI** | Flutter 3.19+ (Material 3) |
+| **State** | Riverpod (StateNotifier + Providers) |
+| **Database** | Isar (NoSQL, embedded) |
+| **Persistence** | SharedPreferences (settings) |
+| **Fonts** | Google Fonts (Inter) |
+| **Architecture** | Feature-first, layered (data → domain → application → presentation) |
 
-## Money & dates (locked decisions)
-- Money stored as **int minor units (paise)** — never double.
-- Dates stored as **UTC**, grouped by **local date** at read time.
-- Category stored as **enum index** — append-only ordering.
+## Architecture
 
-## Fill order (one file at a time)
-1. core/category.dart, core/money.dart
-2. domain/models/expense.dart, domain/repositories/expense_repository.dart
-3. data/sources/* , data/repositories/isar_expense_repository.dart
-4. application/providers.dart
-5. application/expense/* + presentation/expense/* (vertical slice — validates the stack)
-6. application/history/* + presentation/history/* (month->day ledger)
-7. core/theme.dart, shared widgets, app.dart, main.dart
+```
+lib/
+├── core/              # Shared utilities (money, category, theme, dates)
+├── domain/            # Pure Dart entities & repository interfaces
+├── data/              # Isar persistence & repository implementations
+├── application/       # Riverpod controllers & providers (business logic)
+└── presentation/      # Flutter widgets (UI only, no business logic)
+```
 
-Build Dashboard/other modules only after this slice works end to end.
+**Dependency rule:** `presentation → application → domain ← data`
+- Domain is pure Dart — no framework dependency
+- Data layer implements domain interfaces
+- Swap storage backend by implementing domain interfaces (no UI changes needed)
+
+## Screenshots
+
+| Dashboard | History | Analysis |
+|:---------:|:-------:|:--------:|
+| *Coming soon* | *Coming soon* | *Coming soon* |
+
+## Getting Started
+
+### Prerequisites
+- Flutter SDK 3.19.0+
+- Dart 3.3.0+
+
+### Run
+
+```bash
+# Clone the repository
+git clone https://github.com/Ashok-461999/clearSpend.git
+cd clearSpend
+
+# Get dependencies
+flutter pub get
+
+# Generate Isar code
+dart run build_runner build
+
+# Run the app
+flutter run
+```
+
+### Build
+
+```bash
+# Android APK
+flutter build apk --release
+
+# iOS
+flutter build ios --release
+
+# Web
+flutter build web --release
+
+# Windows
+flutter build windows --release
+
+# Linux
+flutter build linux --release
+
+# macOS
+flutter build macos --release
+```
+
+## Data Model
+
+- **Money** stored as `int` minor units (paise/kopeck/cents) — never `double`
+- **Dates** stored as UTC, grouped by local date at read time
+- **Categories** stored as enum index — append-only ordering (new categories added at end)
+
+## License
+
+Built with Flutter. ClearSpend — Premium Finance Tracker.
