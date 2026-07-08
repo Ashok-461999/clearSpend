@@ -30,6 +30,13 @@ class Money {
   /// Stored paise -> display string. 123450 -> "₹1,234.50".
   static String format(int minor) => _fmt.format(minor / 100);
 
+  /// Format with a custom currency symbol and locale.
+  /// 123450 -> "\$1,234.50" when symbol="\$", locale="en_US".
+  static String formatWith(int minor, {required String symbol, String locale = 'en_IN'}) {
+    return NumberFormat.currency(locale: locale, symbol: symbol, decimalDigits: 2)
+        .format(minor / 100);
+  }
+
   /// Stored paise -> plain decimal for prefilling an edit field (no symbol).
   /// 123450 -> "1234.50".
   static String toEditString(int minor) => (minor / 100).toStringAsFixed(2);

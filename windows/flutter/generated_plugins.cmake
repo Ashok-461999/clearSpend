@@ -3,8 +3,11 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  connectivity_plus
   file_selector_windows
   isar_flutter_libs
+  local_auth_windows
+  permission_handler_windows
   share_plus
   url_launcher_windows
 )

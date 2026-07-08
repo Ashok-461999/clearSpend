@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'application/providers.dart';
 import 'core/theme.dart';
+import 'presentation/settings/biometric_gate.dart';
 import 'presentation/shell/main_shell.dart';
 
 class MoneyMateApp extends ConsumerWidget {
@@ -23,12 +24,12 @@ class MoneyMateApp extends ConsumerWidget {
     });
 
     return MaterialApp(
-      title: 'ClearSpend',
+      title: 'FinTrack',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: mode,
-      home: const MainShell(),
+      home: const BiometricGate(child: MainShell()),
     );
   }
 }

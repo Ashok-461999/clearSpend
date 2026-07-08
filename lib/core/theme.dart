@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   AppTheme._();
 
-  // ── ClearSpend Color Palette ──
+  // ── FinTrack Color Palette ──
   static const Color bg = Color(0xFF0B1220);
   static const Color bgSecondary = Color(0xFF111827);
   static const Color cardSurface = Color(0xFF1F2937);

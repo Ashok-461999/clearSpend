@@ -9,13 +9,30 @@ import '../../core/theme.dart';
 import '../../domain/models/expense.dart';
 import '../expense/expense_form_screen.dart';
 import '../history/history_screen.dart';
+import '../khata/khata_screen.dart';
+import '../scanner/qr_scanner_screen.dart';
 import '../shared/quick_expense_sheet.dart';
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
+  @override
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  final _coinVaultKey = GlobalKey();
+
+  void _scrollToCoinVault() {
+    final ctx = _coinVaultKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut);
+    }
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final coinState = ref.watch(coinControllerProvider);
     const months = [
       '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -31,15 +48,13 @@ class DashboardScreen extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 8, height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppTheme.income,
-                    shape: BoxShape.circle,
-                  ),
+                Image.asset(
+                  'assets/images/logo.png',
+                  width: 28,
+                  height: 28,
                 ),
-                const SizedBox(width: 8),
-                const Text('ClearSpend'),
+                const SizedBox(width: 10),
+                const Text('FinTrack'),
               ],
             ),
             Text(monthLabel,
@@ -61,6 +76,8 @@ class DashboardScreen extends ConsumerWidget {
                     color: AppTheme.warningGlass,
                     borderRadius: BorderRadius.circular(20),
                   ),
+                  child: GestureDetector(
+                  onTap: _scrollToCoinVault,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -95,6 +112,7 @@ class DashboardScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                ),
               ],
             ),
           ),
@@ -111,10 +129,17 @@ class DashboardScreen extends ConsumerWidget {
             const _BalanceCard(),
             const SizedBox(height: 14),
             const _BudgetCard(),
+            const SizedBox(height: 14),
+            Consumer(builder: (context, ref, _) {
+              final khata = ref.watch(khataControllerProvider);
+              return _KhataSummaryCard(
+                owed: khata.totalYouAreOwed,
+                owe: khata.totalYouOwe,
+                entryCount: khata.entries.length,
+              );
+            }),
             const SizedBox(height: 20),
             const _SmartInsights(),
-            const SizedBox(height: 20),
-            const _SavingsGoalCard(),
             const SizedBox(height: 20),
             Consumer(builder: (context, ref, _) {
               final state = ref.watch(historyControllerProvider);
@@ -129,7 +154,7 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(height: 20),
             Consumer(builder: (context, ref, _) {
               final coinState = ref.watch(coinControllerProvider);
-              return _CoinVaultCard(coinState: coinState);
+              return _CoinVaultCard(key: _coinVaultKey, coinState: coinState);
             }),
             const SizedBox(height: 14),
             Consumer(builder: (context, ref, _) {
@@ -180,9 +205,27 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => QuickExpenseSheet.show(context),
-        child: const Icon(Icons.add),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'scan',
+            backgroundColor: AppTheme.accent,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const QrScannerScreen()),
+            ),
+            tooltip: 'Scan & Add',
+            child: const Icon(Icons.qr_code_scanner_rounded),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton(
+            heroTag: 'quick_entry',
+            onPressed: () => QuickExpenseSheet.show(context),
+            tooltip: 'Quick Entry',
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }
@@ -210,9 +253,8 @@ class DashboardScreen extends ConsumerWidget {
       ),
     );
   }
-}
 
-class _PremiumSummary extends ConsumerWidget {
+}class _PremiumSummary extends ConsumerWidget {
   const _PremiumSummary();
 
   @override
@@ -366,11 +408,10 @@ class _BalanceCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final balanceAsync = ref.watch(accountBalanceProvider);
-    final balance = balanceAsync.asData?.value ?? 0;
     final state = ref.watch(historyControllerProvider);
+    final income = state.totalIncome;
     final spent = state.totalExpense;
-    final netFlow = state.totalIncome - state.totalExpense;
+    final netFlow = income - spent;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -416,9 +457,9 @@ class _BalanceCard extends ConsumerWidget {
             children: [
               Expanded(
                   child: _BalanceLabel(
-                      label: 'Balance',
-                      amount: Money.format(balance),
-                      color: balance >= 0 ? AppTheme.income : AppTheme.expense)),
+                      label: 'Income',
+                      amount: Money.format(income),
+                      color: AppTheme.income)),
               const SizedBox(width: 10),
               Expanded(
                   child: _BalanceLabel(
@@ -428,7 +469,7 @@ class _BalanceCard extends ConsumerWidget {
               const SizedBox(width: 10),
               Expanded(
                   child: _BalanceLabel(
-                      label: 'Saved',
+                      label: 'Balance',
                       amount: Money.format(netFlow),
                       color: netFlow >= 0 ? AppTheme.income : AppTheme.expense)),
             ],
@@ -804,115 +845,6 @@ class _InsightTile extends StatelessWidget {
   }
 }
 
-class _SavingsGoalCard extends ConsumerWidget {
-  const _SavingsGoalCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final goal = ref.watch(savingsGoalProvider);
-    final historyState = ref.watch(historyControllerProvider);
-    final totalIncome = historyState.totalIncome;
-    final totalExpense = historyState.totalExpense;
-    final savedThisMonth = totalIncome - totalExpense;
-
-    if (goal <= 0 && savedThisMonth <= 0) return const SizedBox.shrink();
-
-    final progress = (goal > 0 ? (savedThisMonth / goal) : 0.0).clamp(0.0, 2.0).toDouble();
-    final pct = (progress * 100).round();
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.cardSurface.withAlpha(180),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.primary.withAlpha(40)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.incomeGlass,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.savings,
-                    size: 16, color: AppTheme.income),
-              ),
-              const SizedBox(width: 10),
-              const Text('Savings Goal', style: AppTheme.sectionTitle),
-              const Spacer(),
-              if (goal > 0)
-                Text(
-                  Money.format(goal),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-            ],
-          ),
-          if (goal > 0) ...[
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: progress.clamp(0, 1),
-                backgroundColor: AppTheme.border,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  pct >= 100 ? AppTheme.income : AppTheme.primary,
-                ),
-                minHeight: 8,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Text(
-                  '${Money.format(savedThisMonth)} saved',
-                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-                const Spacer(),
-                Text(
-                  '$pct%',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: pct >= 100 ? AppTheme.income : AppTheme.primary,
-                  ),
-                ),
-              ],
-            ),
-          ] else if (savedThisMonth > 0) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.trending_up, size: 14, color: AppTheme.income),
-                const SizedBox(width: 6),
-                Text(
-                  'Saved ${Money.format(savedThisMonth)} this month',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.income,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            Text(
-              'Set a savings goal in Settings to track progress!',
-              style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _SpendingStreakCard extends StatelessWidget {
   final List<Expense> monthExpenses;
   final int monthlyBudget;
@@ -1009,7 +941,7 @@ class _SpendingStreakCard extends StatelessWidget {
 
 class _CoinVaultCard extends StatelessWidget {
   final CoinState coinState;
-  const _CoinVaultCard({required this.coinState});
+  const _CoinVaultCard({super.key, required this.coinState});
 
   @override
   Widget build(BuildContext context) {
@@ -1651,12 +1583,118 @@ class _TransactionRow extends ConsumerWidget {
       ),
     );
   }
+}
 
-  String _formatDate(DateTime date, Category cat) {
-    const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${date.day} ${months[date.month - 1]}  •  ${cat.label}';
+String _formatDate(DateTime date, Category cat) {
+  const months = [
+    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  return '${date.day} ${months[date.month - 1]}  •  ${cat.label}';
+}
+
+class _KhataSummaryCard extends StatelessWidget {
+  final int owed;
+  final int owe;
+  final int entryCount;
+  const _KhataSummaryCard({
+    required this.owed,
+    required this.owe,
+    required this.entryCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (entryCount == 0) return const SizedBox.shrink();
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const KhataScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppTheme.primary.withAlpha(50)),
+          color: AppTheme.cardSurface.withAlpha(150),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withAlpha(25),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.book_rounded,
+                  color: AppTheme.primary, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Khata',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: AppTheme.textSecondary)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      _AmountChip(
+                        label: 'Owed',
+                        amount: owed,
+                        color: AppTheme.income,
+                      ),
+                      const SizedBox(width: 12),
+                      _AmountChip(
+                        label: 'Owe',
+                        amount: owe,
+                        color: AppTheme.expense,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right,
+                color: AppTheme.textSecondary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AmountChip extends StatelessWidget {
+  final String label;
+  final int amount;
+  final Color color;
+  const _AmountChip({
+    required this.label,
+    required this.amount,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(20),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withAlpha(50)),
+      ),
+      child: Text(
+        '$label ${amount > 0 ? Money.format(amount) : '₹0'}',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
   }
 }

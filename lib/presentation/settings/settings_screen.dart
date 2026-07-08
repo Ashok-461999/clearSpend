@@ -1,17 +1,19 @@
 import 'dart:io';
 
-import 'package:csv/csv.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../../application/providers.dart';
+import '../../application/settings/app_settings.dart';
+import '../../application/settings/backup_service.dart';
 import '../../application/settings/settings_controller.dart';
 import '../../core/date_range.dart';
 import '../../core/money.dart';
 import '../../core/theme.dart';
+import 'about_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -25,6 +27,13 @@ class SettingsScreen extends ConsumerWidget {
     final defaultRange = ref.watch(defaultRangeTypeProvider);
     final historyState = ref.watch(historyControllerProvider);
     final currentSpend = historyState.total;
+    final biometricLock = ref.watch(biometricLockProvider);
+    final notifyRecurring = ref.watch(notifyRecurringProvider);
+    final notifyEmi = ref.watch(notifyEmiProvider);
+    final notifyLedger = ref.watch(notifyLedgerProvider);
+    final notifyBudget = ref.watch(notifyBudgetProvider);
+    final currencyCode = ref.watch(currencyCodeProvider);
+    final formatMoney = ref.watch(formatMoneyProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -36,12 +45,10 @@ class SettingsScreen extends ConsumerWidget {
           _ProfileCard(
             profile: profile,
             onEditImage: () => _pickImage(context, ref),
-            onEditName: () =>
-                _editName(context, notifier, profile.name),
-            onEditEmail: () =>
-                _editEmail(context, notifier, profile.email),
-            onEditBudget: () => _editBudget(
-                context, notifier, profile.monthlyBudget),
+            onEditName: () => _editName(context, notifier, profile.name),
+            onEditEmail: () => _editEmail(context, notifier, profile.email),
+            onEditBudget: () =>
+                _editBudget(context, notifier, profile.monthlyBudget),
           ),
           const SizedBox(height: 24),
           _Section(
@@ -50,8 +57,12 @@ class SettingsScreen extends ConsumerWidget {
               _ThemeTile(themeMode: themeMode, ref: ref),
               _DefaultRangeTile(defaultRange: defaultRange, ref: ref),
               _CurrencyTile(
-                currency: settings.currencyCode,
-                onChanged: (v) => notifier.setCurrency(v),
+                currency: currencyCode,
+                formatMoney: formatMoney,
+                onChange: (code) {
+                  final box = ref.read(settingsBoxProvider);
+                  box.put('currencyCode', code);
+                },
               ),
               _WeekStartTile(
                 firstDay: settings.firstDayOfWeek,
@@ -71,12 +82,53 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 24),
           ],
           _Section(
-            title: 'SAVINGS',
+            title: 'SECURITY',
             children: [
-              _SavingsGoalTile(
-                profile: profile,
-                ref: ref,
-                onSetGoal: () => _editSavingsGoal(context, ref),
+              _BiometricLockTile(
+                enabled: biometricLock,
+                onChanged: (v) => _toggleBiometricLock(context, ref, v),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _Section(
+            title: 'NOTIFICATIONS',
+            children: [
+              _NotificationTile(
+                icon: Icons.repeat,
+                title: 'Recurring Transactions',
+                value: notifyRecurring,
+                onChanged: (v) {
+                  ref.read(notifyRecurringProvider.notifier).state = v;
+                  ref.read(settingsBoxProvider).put('notifyRecurring', v);
+                },
+              ),
+              _NotificationTile(
+                icon: Icons.credit_card,
+                title: 'EMI Due Reminders',
+                value: notifyEmi,
+                onChanged: (v) {
+                  ref.read(notifyEmiProvider.notifier).state = v;
+                  ref.read(settingsBoxProvider).put('notifyEmi', v);
+                },
+              ),
+              _NotificationTile(
+                icon: Icons.book,
+                title: 'Ledger Due Dates',
+                value: notifyLedger,
+                onChanged: (v) {
+                  ref.read(notifyLedgerProvider.notifier).state = v;
+                  ref.read(settingsBoxProvider).put('notifyLedger', v);
+                },
+              ),
+              _NotificationTile(
+                icon: Icons.pie_chart,
+                title: 'Budget Overage Alerts',
+                value: notifyBudget,
+                onChanged: (v) {
+                  ref.read(notifyBudgetProvider.notifier).state = v;
+                  ref.read(settingsBoxProvider).put('notifyBudget', v);
+                },
               ),
             ],
           ),
@@ -84,7 +136,8 @@ class SettingsScreen extends ConsumerWidget {
           _Section(
             title: 'DATA',
             children: [
-              const _ExportTile(),
+              const _BackupTile(),
+              const _RestoreTile(),
               _ResetTile(ref: ref),
             ],
           ),
@@ -92,10 +145,28 @@ class SettingsScreen extends ConsumerWidget {
           _Section(
             title: 'ABOUT',
             children: [
-              _Tile(
-                icon: Icons.info_outline,
-                title: 'Version',
-                subtitle: '1.0.0',
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentGlass,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.info_outline,
+                      color: AppTheme.accent, size: 20),
+                ),
+                title: const Text('About FinTrack',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textPrimary)),
+                subtitle: const Text('Version 1.0.0',
+                    style: TextStyle(
+                        fontSize: 12, color: AppTheme.textSecondary)),
+                trailing: const Icon(Icons.chevron_right,
+                    size: 18, color: AppTheme.textSecondary),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AboutScreen()),
+                ),
               ),
             ],
           ),
@@ -103,6 +174,30 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _toggleBiometricLock(
+      BuildContext context, WidgetRef ref, bool enable) async {
+    if (enable) {
+      final localAuth = LocalAuthentication();
+      final canCheck = await localAuth.canCheckBiometrics;
+      if (!canCheck) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content:
+                    Text('Biometrics not available on this device')),
+          );
+        }
+        return;
+      }
+      final authenticated = await localAuth.authenticate(
+        localizedReason: 'Enable app lock with biometrics',
+      );
+      if (!authenticated) return;
+    }
+    ref.read(biometricLockProvider.notifier).state = enable;
+    ref.read(settingsBoxProvider).put('biometricLock', enable);
   }
 
   void _editName(
@@ -248,13 +343,19 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            if (ref.read(settingsControllerProvider).profile.imagePath != null) ...[
+            if (ref
+                    .read(settingsControllerProvider)
+                    .profile
+                    .imagePath !=
+                null) ...[
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    ref.read(settingsControllerProvider.notifier).updateImage(null);
+                    ref
+                        .read(settingsControllerProvider.notifier)
+                        .updateImage(null);
                     Navigator.pop(ctx);
                   },
                   icon: const Icon(Icons.delete_outline, size: 16),
@@ -271,9 +372,12 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
     if (source == null) return;
-    final picked = await picker.pickImage(source: source, maxWidth: 512, maxHeight: 512);
+    final picked =
+        await picker.pickImage(source: source, maxWidth: 512, maxHeight: 512);
     if (picked != null) {
-      ref.read(settingsControllerProvider.notifier).updateImage(picked.path);
+      ref
+          .read(settingsControllerProvider.notifier)
+          .updateImage(picked.path);
     }
   }
 
@@ -304,54 +408,6 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _editSavingsGoal(BuildContext context, WidgetRef ref) {
-    final current = ref.read(savingsGoalProvider);
-    final strVal = current > 0 ? (current / 100).toStringAsFixed(0) : '';
-    final controller = TextEditingController(text: strVal);
-    showDialog(
-      context: context,
-      builder: (ctx) => _StyledDialog(
-        title: 'Monthly Savings Goal',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('How much do you want to save each month?',
-                style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: _inputDec('Enter savings goal', prefix: '₹ '),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              ref.read(savingsGoalProvider.notifier).state = 0;
-              ref.read(sharedPreferencesProvider).remove('savings_goal');
-              Navigator.pop(ctx);
-            },
-            child: const Text('Remove'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final v = Money.parseToMinor(controller.text.trim());
-              if (v != null) {
-                ref.read(savingsGoalProvider.notifier).state = v;
-                ref.read(sharedPreferencesProvider).setInt('savings_goal', v);
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
   InputDecoration _inputDec(String hint, {String prefix = ''}) {
     return InputDecoration(
       hintText: hint,
@@ -365,6 +421,8 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 }
+
+// ── Widgets ──
 
 class _StyledDialog extends StatelessWidget {
   final String title;
@@ -477,8 +535,7 @@ class _ProfileCard extends StatelessWidget {
                           color: AppTheme.textPrimary)),
                 ),
                 const SizedBox(width: 6),
-                Icon(Icons.edit,
-                    size: 16, color: AppTheme.textSecondary),
+                Icon(Icons.edit, size: 16, color: AppTheme.textSecondary),
               ],
             ),
           ),
@@ -575,11 +632,13 @@ class _Section extends StatelessWidget {
 
 class _Tile extends StatelessWidget {
   final IconData icon;
+  final Color? iconColor;
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
   const _Tile({
     required this.icon,
+    this.iconColor,
     required this.title,
     required this.subtitle,
     this.onTap,
@@ -587,16 +646,17 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final color = iconColor ?? AppTheme.accent;
     return Column(
       children: [
         ListTile(
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppTheme.accentGlass,
+              color: color.withAlpha(30),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: AppTheme.accent, size: 20),
+            child: Icon(icon, color: color, size: 20),
           ),
           title: Text(title,
               maxLines: 1,
@@ -607,16 +667,21 @@ class _Tile extends StatelessWidget {
           subtitle: Text(subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style:
-                  const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+              style: const TextStyle(
+                  fontSize: 12, color: AppTheme.textSecondary)),
+          trailing: onTap != null
+              ? const Icon(Icons.chevron_right,
+                    size: 18, color: AppTheme.textSecondary)
+              : null,
           onTap: onTap,
         ),
-        if (onTap != null)
-          const Divider(height: 1, indent: 72, endIndent: 16),
+        if (onTap != null) const Divider(height: 1, indent: 72, endIndent: 16),
       ],
     );
   }
 }
+
+// ── Preference Tiles ──
 
 class _ThemeTile extends StatelessWidget {
   final ThemeMode themeMode;
@@ -735,8 +800,8 @@ class _DefaultRangeTile extends StatelessWidget {
         onSelected: (v) =>
             ref.read(defaultRangeTypeProvider.notifier).state = v,
         itemBuilder: (_) => DateRangeType.values
-            .map((t) => PopupMenuItem(
-                value: t, child: Text(_label(t))))
+            .map((t) =>
+                PopupMenuItem(value: t, child: Text(_label(t))))
             .toList(),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -757,63 +822,146 @@ class _DefaultRangeTile extends StatelessWidget {
 
 class _CurrencyTile extends StatelessWidget {
   final String currency;
-  final ValueChanged<String> onChanged;
-  const _CurrencyTile({required this.currency, required this.onChanged});
+  final String Function(int) formatMoney;
+  final ValueChanged<String> onChange;
+  const _CurrencyTile({
+    required this.currency,
+    required this.formatMoney,
+    required this.onChange,
+  });
 
   static const _currencies = [
     ('INR', '₹', 'Indian Rupee'),
-    ('USD', '\$', 'US Dollar'),
+    ('USD', r'$', 'US Dollar'),
     ('EUR', '€', 'Euro'),
     ('GBP', '£', 'British Pound'),
+    ('JPY', '¥', 'Japanese Yen'),
+    ('CNY', '¥', 'Chinese Yuan'),
+    ('AED', 'د.إ', 'UAE Dirham'),
+    ('SAR', '﷼', 'Saudi Riyal'),
   ];
-
-  String _currencyLabel(String code) {
-    for (final c in _currencies) {
-      if (c.$1 == code) return '${c.$2} ${c.$3}';
-    }
-    return code;
-  }
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppTheme.warningGlass,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: const Icon(Icons.monetization_on_outlined,
-            color: AppTheme.warning, size: 20),
-      ),
-      title: const Text('Currency',
-          style: TextStyle(
-              fontWeight: FontWeight.w500,
-              color: AppTheme.textPrimary)),
-      subtitle: Text(_currencyLabel(currency),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style:
-              const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-      trailing: PopupMenuButton<String>(
-        onSelected: onChanged,
-        itemBuilder: (_) => _currencies
-            .map((c) => PopupMenuItem(
-                value: c.$1, child: Text('${c.$2}  ${c.$3}')))
-            .toList(),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppTheme.warningGlass,
-            borderRadius: BorderRadius.circular(8),
+    final current = _currencies.firstWhere(
+      (c) => c.$1 == currency,
+      orElse: () => ('INR', '₹', 'Indian Rupee'),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.warningGlass,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.monetization_on_outlined,
+                    color: AppTheme.warning, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: const Text('Currency',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 16,
+                        color: AppTheme.textPrimary)),
+              ),
+            ],
           ),
-          child: Text(currency,
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.warning)),
-        ),
+          const SizedBox(height: 12),
+          _CurrencyPicker(
+            currencies: _currencies,
+            selectedCode: currency,
+            onChanged: onChange,
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.cardSurface.withAlpha(100),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Text('${current.$2}  ',
+                    style: const TextStyle(
+                        fontSize: 16, color: AppTheme.textPrimary)),
+                Expanded(
+                  child: Text(
+                    '${formatMoney(123450)} preview',
+                    style: const TextStyle(
+                        fontSize: 13, color: AppTheme.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _CurrencyPicker extends StatelessWidget {
+  final List<(String, String, String)> currencies;
+  final String selectedCode;
+  final ValueChanged<String> onChanged;
+
+  const _CurrencyPicker({
+    required this.currencies,
+    required this.selectedCode,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: currencies.map((c) {
+        final isSelected = c.$1 == selectedCode;
+        return GestureDetector(
+          onTap: () => onChanged(c.$1),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? AppTheme.warning.withAlpha(30)
+                  : AppTheme.cardSurface.withAlpha(80),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? AppTheme.warning.withAlpha(120)
+                    : AppTheme.border,
+              ),
+            ),
+            child: Column(
+              children: [
+                Text(c.$2,
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected
+                            ? AppTheme.warning
+                            : AppTheme.textPrimary)),
+                Text(c.$1,
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: isSelected
+                            ? AppTheme.warning
+                            : AppTheme.textSecondary)),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -858,8 +1006,7 @@ class _WeekStartTile extends StatelessWidget {
       trailing: PopupMenuButton<int>(
         onSelected: onChanged,
         itemBuilder: (_) => _days
-            .map((d) => PopupMenuItem(
-                value: d.$1, child: Text(d.$2)))
+            .map((d) => PopupMenuItem(value: d.$1, child: Text(d.$2)))
             .toList(),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -965,85 +1112,104 @@ class _BudgetTile extends StatelessWidget {
   }
 }
 
-class _SavingsGoalTile extends StatelessWidget {
-  final UserProfile profile;
-  final WidgetRef ref;
-  final VoidCallback onSetGoal;
-  const _SavingsGoalTile({
-    required this.profile,
-    required this.ref,
-    required this.onSetGoal,
+// ── Security Tile ──
+
+class _BiometricLockTile extends StatelessWidget {
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  const _BiometricLockTile({
+    required this.enabled,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final goal = ref.watch(savingsGoalProvider);
-    final historyState = ref.watch(historyControllerProvider);
-    final saved = historyState.totalIncome - historyState.totalExpense;
-    final goalDisplay = goal > 0 ? Money.format(goal) : 'Not set';
-
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
         children: [
-          Row(
-            children: [
-              const Icon(Icons.savings, size: 18, color: AppTheme.income),
-              const SizedBox(width: 8),
-              const Text('Monthly Savings Goal',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: AppTheme.textPrimary)),
-              const Spacer(),
-              Flexible(
-                child: Text(goalDisplay,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        color: AppTheme.textPrimary)),
-              ),
-            ],
-          ),
-          if (goal > 0) ...[
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: (saved / goal).clamp(0, 1),
-                minHeight: 10,
-                backgroundColor: AppTheme.border,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  saved >= goal ? AppTheme.income : AppTheme.primary,
-                ),
-              ),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withAlpha(30),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(height: 8),
-            Row(
+            child: const Icon(Icons.fingerprint,
+                color: AppTheme.accent, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Saved: ${Money.format(saved)}',
-                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
-                const Spacer(),
+                const Text('App Lock',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textPrimary)),
                 Text(
-                  saved >= goal
-                      ? 'Goal reached!'
-                      : '${((saved / goal) * 100).round()}%',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: saved >= goal ? AppTheme.income : AppTheme.textSecondary,
-                  ),
+                  enabled
+                      ? 'Biometric lock enabled'
+                      : 'Require biometric to open',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppTheme.textSecondary),
                 ),
               ],
             ),
-          ],
-          const SizedBox(height: 12),
+          ),
+          Switch(
+            value: enabled,
+            activeColor: AppTheme.primary,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Notification Tile ──
+
+class _NotificationTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _NotificationTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withAlpha(20),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppTheme.primary, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textPrimary)),
+          ),
           SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: onSetGoal,
-              child: Text(goal > 0 ? 'Update Goal' : 'Set Goal'),
+            height: 28,
+            child: Switch.adaptive(
+              value: value,
+              activeColor: AppTheme.primary,
+              onChanged: onChanged,
             ),
           ),
         ],
@@ -1052,78 +1218,132 @@ class _SavingsGoalTile extends StatelessWidget {
   }
 }
 
-class _ExportTile extends ConsumerWidget {
-  const _ExportTile();
+// ── Backup & Restore ──
+
+class _BackupTile extends ConsumerWidget {
+  const _BackupTile();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return _Tile(
-      icon: Icons.file_download_outlined,
-      title: 'Export Data',
-      subtitle: 'Download your expenses as CSV',
-      onTap: () => _export(context, ref),
+      icon: Icons.backup,
+      iconColor: AppTheme.income,
+      title: 'Backup Data',
+      subtitle: 'Export all data to a JSON file',
+      onTap: () => _doBackup(context, ref),
     );
   }
 
-  Future<void> _export(BuildContext context, WidgetRef ref) async {
+  Future<void> _doBackup(BuildContext context, WidgetRef ref) async {
     try {
-      final repo = ref.read(expenseRepositoryProvider);
-      final all = await repo.watchInRange(
-        start: DateTime(2000),
-        end: DateTime(2100),
-      ).first;
-
-      if (all.isEmpty) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No expenses to export')),
-          );
-        }
-        return;
-      }
-
-      all.sort((a, b) => b.dateUtc.compareTo(a.dateUtc));
-
-      final rows = <List<String>>[
-        ['Date', 'Category', 'Type', 'Amount', 'Notes'],
-        for (final e in all)
-          [
-            '${e.localDate.year}-${e.localDate.month.toString().padLeft(2, '0')}-${e.localDate.day.toString().padLeft(2, '0')}',
-            e.category.label,
-            e.isIncome ? 'Income' : 'Expense',
-            (e.amountMinor / 100).toStringAsFixed(2),
-            e.notes ?? '',
-          ],
-      ];
-
-      final csv = const ListToCsvConverter().convert(rows);
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/moneymate_export.csv');
-      await file.writeAsString(csv);
-
-      if (context.mounted) {
-        await Share.shareXFiles([XFile(file.path)], text: 'MoneyMate Export');
+      final isar = ref.read(isarProvider);
+      final path = await BackupService.exportToJson(isar);
+      if (path != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Backup saved to $path')),
+        );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e')),
+          SnackBar(content: Text('Backup failed: $e')),
         );
       }
     }
   }
 }
 
-class _ResetTile extends StatelessWidget {
+class _RestoreTile extends ConsumerWidget {
+  const _RestoreTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _Tile(
+      icon: Icons.restore,
+      iconColor: AppTheme.warning,
+      title: 'Restore Data',
+      subtitle: 'Import from a backup file',
+      onTap: () => _confirmRestore(context, ref),
+    );
+  }
+
+  void _confirmRestore(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: const Text('Restore Backup?',
+            style: TextStyle(color: AppTheme.textPrimary)),
+        content: const Text(
+          'This will overwrite ALL your current data with the backup. '
+          'This action cannot be undone. Make sure you have a current backup '
+          'if needed.',
+          style: TextStyle(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.warning),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _doRestore(context, ref);
+            },
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _doRestore(BuildContext context, WidgetRef ref) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (result == null || result.files.single.path == null) return;
+
+      final isar = ref.read(isarProvider);
+      final count =
+          await BackupService.importFromJson(isar, result.files.single.path!);
+
+      ref.invalidate(historyControllerProvider);
+      ref.invalidate(analysisControllerProvider);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restored $count records successfully')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore failed: $e')),
+        );
+      }
+    }
+  }
+}
+
+// ── Reset ──
+
+class _ResetTile extends ConsumerWidget {
   final WidgetRef ref;
   const _ResetTile({required this.ref});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return _Tile(
       icon: Icons.delete_forever_outlined,
-      title: 'Reset All Data',
-      subtitle: 'Delete all expenses and start fresh',
+      iconColor: AppTheme.expense,
+      title: 'Clear All Data',
+      subtitle: 'Delete all records and start fresh',
       onTap: () => _confirmReset(context),
     );
   }
@@ -1134,11 +1354,46 @@ class _ResetTile extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.cardSurface,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Reset All Data?',
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: const Text('Clear All Data?',
             style: TextStyle(color: AppTheme.textPrimary)),
         content: const Text(
-          'This will permanently delete all your expenses and EMI records. This action cannot be undone.',
+          'This will permanently delete all your expenses, EMIs, '
+          'khata entries, trades, budgets, goals, and investments. '
+          'This action cannot be undone.',
+          style: TextStyle(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _confirmFinalReset(context);
+            },
+            child: const Text('Delete Everything',
+                style: TextStyle(color: AppTheme.expense)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmFinalReset(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: const Text('Are you absolutely sure?',
+            style: TextStyle(color: AppTheme.expense)),
+        content: const Text(
+          'This is your final warning. All your financial data will be '
+          'permanently erased. Consider exporting a backup first.',
           style: TextStyle(color: AppTheme.textSecondary),
         ),
         actions: [
@@ -1147,17 +1402,19 @@ class _ResetTile extends StatelessWidget {
               child: const Text('Cancel')),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.expense,
-            ),
+                backgroundColor: AppTheme.expense),
             onPressed: () async {
-              await ref.read(expenseRepositoryProvider).clearAll();
-              await ref.read(emiRepositoryProvider).clearAll();
+              Navigator.pop(ctx);
+              await BackupService.clearAllData(ref.read(isarProvider));
               ref.invalidate(historyControllerProvider);
               ref.invalidate(analysisControllerProvider);
-              if (ctx.mounted) Navigator.pop(ctx);
+              ref.invalidate(tradeControllerProvider);
+              ref.invalidate(khataControllerProvider);
+              ref.invalidate(budgetControllerProvider);
+              ref.invalidate(investmentControllerProvider);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Data reset complete')),
+                  const SnackBar(content: Text('All data cleared')),
                 );
               }
             },

@@ -1,20 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/category.dart';
 import '../core/date_range.dart';
+import '../core/money.dart';
+import '../data/repositories/isar_category_budget_repository.dart';
 import '../data/repositories/isar_emi_repository.dart';
 import '../data/repositories/isar_expense_repository.dart';
+import '../data/repositories/isar_goal_repository.dart';
+import '../data/repositories/isar_investment_repository.dart';
+import '../data/repositories/isar_khata_repository.dart';
+import '../data/repositories/isar_sip_installment_repository.dart';
+import '../data/repositories/isar_trade_repository.dart';
 import '../domain/models/expense.dart';
+import '../domain/repositories/category_budget_repository.dart';
 import '../domain/repositories/emi_repository.dart';
 import '../domain/repositories/expense_repository.dart';
+import '../domain/repositories/goal_repository.dart';
+import '../domain/repositories/investment_repository.dart';
+import '../domain/repositories/khata_repository.dart';
+import '../domain/repositories/sip_installment_repository.dart';
+import '../domain/repositories/trade_repository.dart';
+import 'budget/budget_hive_controller.dart';
 import 'coins/coin_controller.dart';
 import 'emi/emi_controller.dart';
 import 'expense/expense_form_controller.dart';
 import 'history/history_controller.dart';
+import 'investment/investment_controller.dart';
+import 'khata/khata_controller.dart';
+import 'settings/app_settings.dart';
 import 'settings/settings_controller.dart';
+import 'trade/trade_controller.dart';
 
 final sharedPreferencesProvider =
     Provider<SharedPreferences>((ref) => throw UnimplementedError());
@@ -140,9 +159,15 @@ final projectedMonthEndProvider = Provider<int>((ref) {
   return historyState.totalExpense + (avg * remaining);
 });
 
-final savingsGoalProvider = StateProvider<int>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return prefs.getInt('savings_goal') ?? 0;
+final khataRepositoryProvider = Provider<KhataRepository>((ref) {
+  return IsarKhataRepository(ref.watch(isarProvider));
+});
+
+final khataControllerProvider =
+    StateNotifierProvider<KhataController, KhataState>((ref) {
+  return KhataController(
+    ref.watch(khataRepositoryProvider),
+  );
 });
 
 final coinControllerProvider =
@@ -175,4 +200,67 @@ final wastedTotalProvider = Provider<int>((ref) {
     if (!e.category.isEssential) wasted += e.amountMinor;
   }
   return wasted;
+});
+
+final tradeRepositoryProvider = Provider<TradeRepository>((ref) {
+  return IsarTradeRepository(ref.watch(isarProvider));
+});
+
+final tradeControllerProvider =
+    StateNotifierProvider<TradeController, TradeState>((ref) {
+  return TradeController(ref.watch(tradeRepositoryProvider));
+});
+
+final categoryBudgetRepositoryProvider =
+    Provider<CategoryBudgetRepository>((ref) {
+  return IsarCategoryBudgetRepository(ref.watch(isarProvider));
+});
+
+final goalRepositoryProvider = Provider<GoalRepository>((ref) {
+  return IsarGoalRepository(ref.watch(isarProvider));
+});
+
+final budgetControllerProvider =
+    StateNotifierProvider<BudgetHiveController, BudgetHiveState>((ref) {
+  final budgetBox = ref.watch(budgetHiveBoxProvider);
+  final goalsBox = ref.watch(goalsHiveBoxProvider);
+  final nextId = ref.watch(nextGoalIdProvider);
+  final ctrl = BudgetHiveController(budgetBox, goalsBox, nextId);
+
+  final now = DateTime.now();
+  final start = DateTime(now.year, now.month, 1);
+  final end = DateTime(now.year, now.month + 1, 1);
+  ref.watch(expenseRepositoryProvider).watchInRange(start: start, end: end).listen((exps) {
+    ctrl.injectMonthExpenses(exps);
+  });
+
+  return ctrl;
+});
+
+final investmentRepositoryProvider = Provider<InvestmentRepository>((ref) {
+  return IsarInvestmentRepository(ref.watch(isarProvider));
+});
+
+final investmentControllerProvider =
+    StateNotifierProvider<InvestmentController, InvestmentState>((ref) {
+  return InvestmentController(
+    ref.watch(investmentRepositoryProvider),
+    ref.watch(sipInstallmentRepositoryProvider),
+  );
+});
+
+final sipInstallmentRepositoryProvider =
+    Provider<SipInstallmentRepository>((ref) {
+  return IsarSipInstallmentRepository(ref.watch(isarProvider));
+});
+
+final includeInvestmentsInNetWorthProvider = StateProvider<bool>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return prefs.getBool('include_investments_in_net_worth') ?? false;
+});
+
+final formatMoneyProvider = Provider<String Function(int)>((ref) {
+  final symbol = ref.watch(currencySymbolProvider);
+  final locale = ref.watch(localeForCurrencyProvider);
+  return (int minor) => Money.formatWith(minor, symbol: symbol, locale: locale);
 });
