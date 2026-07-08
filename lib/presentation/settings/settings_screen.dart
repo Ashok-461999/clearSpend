@@ -155,7 +155,7 @@ class SettingsScreen extends ConsumerWidget {
                   child: const Icon(Icons.info_outline,
                       color: AppTheme.accent, size: 20),
                 ),
-                title: const Text('About FinTrack',
+                title: const Text('About ClearSpend',
                     style: TextStyle(
                         fontWeight: FontWeight.w500,
                         color: AppTheme.textPrimary)),

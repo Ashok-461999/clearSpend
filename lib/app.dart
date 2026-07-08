@@ -24,7 +24,7 @@ class MoneyMateApp extends ConsumerWidget {
     });
 
     return MaterialApp(
-      title: 'FinTrack',
+      title: 'ClearSpend',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),

@@ -54,7 +54,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   height: 28,
                 ),
                 const SizedBox(width: 10),
-                const Text('FinTrack'),
+                const Text('ClearSpend'),
               ],
             ),
             Text(monthLabel,

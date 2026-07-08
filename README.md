@@ -1,13 +1,13 @@
-# FinTrack — Personal Finance Manager
+# ClearSpend — Personal Finance Manager
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.19%2B-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.3%2B-0175C2?logo=dart&logoColor=white)](https://dart.dev)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20Web%20%7C%20Windows%20%7C%20macOS-blue)](https://flutter.dev)
 
-**FinTrack** is an offline-first personal finance manager built with Flutter. Track expenses, manage budgets, monitor investments, and achieve your savings goals — all without sharing data to any server.
+**ClearSpend** is an offline-first personal finance manager built with Flutter. Track expenses, manage budgets, monitor investments, and achieve your savings goals — all without sharing data to any server.
 
-![FinTrack Dashboard](assets/images/logo.png)
+![ClearSpend Dashboard](assets/images/logo.png)
 
 ---
 
@@ -132,7 +132,7 @@
 
 ## Architecture
 
-FinTrack follows a **layered architecture** with strict dependency rules:
+ClearSpend follows a **layered architecture** with strict dependency rules:
 
 ```
 ┌──────────────────────────────────┐
@@ -353,5 +353,5 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 <p align="center">
   Built with ❤️ using Flutter<br>
-  <sub>FinTrack — Your money, under your control.</sub>
+  <sub>ClearSpend — Your money, under your control.</sub>
 </p>

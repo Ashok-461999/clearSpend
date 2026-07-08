@@ -30,7 +30,7 @@ class AboutScreen extends StatelessWidget {
           const SizedBox(height: 20),
           const Center(
             child: Text(
-              'FinTrack',
+              'ClearSpend',
               style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w800,
@@ -51,12 +51,12 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 32),
           _sectionHeader('App Info'),
-          _infoTile(Icons.code, 'Developer', 'FinTrack Team'),
+          _infoTile(Icons.code, 'Developer', 'ClearSpend Team'),
           _infoTile(Icons.update, 'Build', '1.0.0+1'),
           _infoTile(Icons.storage, 'Data', 'Stored locally on device'),
           _infoTile(Icons.security, 'Privacy', 'No data shared externally'),
           const SizedBox(height: 32),
-          _sectionHeader('About FinTrack'),
+          _sectionHeader('About ClearSpend'),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -65,7 +65,7 @@ class AboutScreen extends StatelessWidget {
               border: Border.all(color: AppTheme.border),
             ),
             child: const Text(
-              'FinTrack is an offline-first personal finance manager. '
+              'ClearSpend is an offline-first personal finance manager. '
               'All your financial data is stored securely on your device. '
               'No accounts, no cloud, no tracking.',
               style: TextStyle(
@@ -195,7 +195,7 @@ class AboutScreen extends StatelessWidget {
           _faqItem(
             question: 'Is my data synced across devices?',
             answer:
-                'No. FinTrack is fully offline-first. Your data never leaves your device. '
+                'No. ClearSpend is fully offline-first. Your data never leaves your device. '
                 'To move data between devices, use the backup/restore feature.',
           ),
           _faqItem(
@@ -241,7 +241,7 @@ class AboutScreen extends StatelessWidget {
           const SizedBox(height: 48),
           Center(
             child: Text(
-              'Made with Flutter  \u2665  FinTrack 2026',
+              'Made with Flutter  \u2665  ClearSpend 2026',
               style: TextStyle(
                 fontSize: 12,
                 color: AppTheme.textSecondary.withAlpha(150),

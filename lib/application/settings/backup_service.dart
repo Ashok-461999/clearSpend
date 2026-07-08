@@ -41,7 +41,7 @@ class BackupService {
       final json = const JsonEncoder.withIndent('  ').convert(data);
 
       final result = await FilePicker.platform.saveFile(
-        dialogTitle: 'Export FinTrack Backup',
+        dialogTitle: 'Export ClearSpend Backup',
         fileName: 'fintrack_backup_${DateTime.now().millisecondsSinceEpoch}.json',
         type: FileType.custom,
         allowedExtensions: ['json'],
