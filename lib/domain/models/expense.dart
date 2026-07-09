@@ -6,6 +6,7 @@ class Expense {
   final Category category;
   final String? notes;
   final DateTime dateUtc;
+  final bool isWaste;
 
   const Expense({
     this.id,
@@ -13,6 +14,7 @@ class Expense {
     required this.category,
     required this.dateUtc,
     this.notes,
+    this.isWaste = false,
   });
 
   factory Expense.fromLocal({
@@ -21,6 +23,7 @@ class Expense {
     required Category category,
     required DateTime localDate,
     String? notes,
+    bool isWaste = false,
   }) {
     return Expense(
       id: id,
@@ -28,6 +31,7 @@ class Expense {
       category: category,
       dateUtc: localDate.toUtc(),
       notes: notes,
+      isWaste: isWaste,
     );
   }
 
@@ -40,6 +44,7 @@ class Expense {
     Category? category,
     String? notes,
     DateTime? dateUtc,
+    bool? isWaste,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -47,6 +52,7 @@ class Expense {
       category: category ?? this.category,
       notes: notes ?? this.notes,
       dateUtc: dateUtc ?? this.dateUtc,
+      isWaste: isWaste ?? this.isWaste,
     );
   }
 }

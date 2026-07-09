@@ -635,6 +635,30 @@ class _QuickExpenseSheetState extends ConsumerState<QuickExpenseSheet> {
                 },
               ),
               _buildNotesField(),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.mood_bad_outlined,
+                      size: 16, color: AppTheme.expense),
+                  const SizedBox(width: 8),
+                  const Text('Waste',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textPrimary)),
+                  const Spacer(),
+                  SizedBox(
+                    height: 24,
+                    child: Switch.adaptive(
+                      value: state.isWaste,
+                      activeColor: AppTheme.expense,
+                      onChanged: (v) =>
+                          ref.read(expenseFormControllerProvider.notifier)
+                              .setIsWaste(v),
+                    ),
+                  ),
+                ],
+              ),
               if (state.error != null) ...[
                 const SizedBox(height: 8),
                 Text(

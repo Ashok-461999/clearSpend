@@ -125,6 +125,7 @@ class BackupService {
       'categoryIndex': e.categoryIndex,
       'notes': e.notes,
       'dateUtc': e.dateUtc.toIso8601String(),
+      'isWaste': e.isWaste,
     };
   }
 
@@ -133,7 +134,8 @@ class BackupService {
       ..amountMinor = m['amountMinor'] as int
       ..categoryIndex = m['categoryIndex'] as int
       ..notes = m['notes'] as String?
-      ..dateUtc = DateTime.parse(m['dateUtc'] as String);
+      ..dateUtc = DateTime.parse(m['dateUtc'] as String)
+      ..isWaste = m['isWaste'] as bool? ?? false;
   }
 
   static Map<String, dynamic> _emiToMap(IsarEmi e) {

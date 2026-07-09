@@ -23,6 +23,8 @@ class IsarExpense {
   @Index()
   late DateTime dateUtc;
 
+  bool isWaste = false;
+
   IsarExpense();
 
   factory IsarExpense.fromDomain(Expense e) {
@@ -30,7 +32,8 @@ class IsarExpense {
       ..amountMinor = e.amountMinor
       ..categoryIndex = e.category.index
       ..notes = e.notes
-      ..dateUtc = e.dateUtc;
+      ..dateUtc = e.dateUtc
+      ..isWaste = e.isWaste;
     if (e.id != null) row.id = e.id!;
     return row;
   }
@@ -41,5 +44,6 @@ class IsarExpense {
         category: Category.values[categoryIndex],
         notes: notes,
         dateUtc: dateUtc,
+        isWaste: isWaste,
       );
 }

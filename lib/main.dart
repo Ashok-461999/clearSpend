@@ -28,12 +28,16 @@ Future<void> main() async {
 
   try {
     await NotificationService.init();
-    final notifyDaily = settingsBox.get('notifyDailyExpense', defaultValue: false) as bool;
-    if (notifyDaily) {
-      final hour = settingsBox.get('dailyReminderHour', defaultValue: 20) as int;
-      final minute = settingsBox.get('dailyReminderMinute', defaultValue: 0) as int;
-      await NotificationService.scheduleDailyReminder(hour: hour, minute: minute);
+    final isFirstLaunch = settingsBox.get('first_launch_complete', defaultValue: false) as bool;
+    if (!isFirstLaunch) {
+      settingsBox.put('dailyReminderHour', 20);
+      settingsBox.put('dailyReminderMinute', 0);
+      settingsBox.put('first_launch_complete', true);
+      await NotificationService.requestAndroidPermission();
     }
+    final hour = settingsBox.get('dailyReminderHour', defaultValue: 20) as int;
+    final minute = settingsBox.get('dailyReminderMinute', defaultValue: 0) as int;
+    await NotificationService.scheduleDailyReminder(hour: hour, minute: minute);
   } catch (_) {}
 
   runApp(

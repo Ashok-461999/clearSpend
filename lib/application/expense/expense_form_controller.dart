@@ -14,6 +14,7 @@ class ExpenseFormState {
   final DateTime date;
   final bool isSubmitting;
   final String? error;
+  final bool isWaste;
 
   const ExpenseFormState({
     this.editingId,
@@ -23,6 +24,7 @@ class ExpenseFormState {
     required this.date,
     this.isSubmitting = false,
     this.error,
+    this.isWaste = false,
   });
 
   ExpenseFormState copyWith({
@@ -33,6 +35,7 @@ class ExpenseFormState {
     DateTime? date,
     bool? isSubmitting,
     String? error,
+    bool? isWaste,
     bool clearError = false,
   }) {
     return ExpenseFormState(
@@ -43,6 +46,7 @@ class ExpenseFormState {
       date: date ?? this.date,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       error: clearError ? null : (error ?? this.error),
+      isWaste: isWaste ?? this.isWaste,
     );
   }
 }
@@ -70,6 +74,10 @@ class ExpenseFormController extends StateNotifier<ExpenseFormState> {
     state = state.copyWith(date: date, clearError: true);
   }
 
+  void setIsWaste(bool value) {
+    state = state.copyWith(isWaste: value);
+  }
+
   void loadForEdit(Expense expense) {
     state = ExpenseFormState(
       editingId: expense.id,
@@ -77,6 +85,7 @@ class ExpenseFormController extends StateNotifier<ExpenseFormState> {
       category: expense.category,
       notes: expense.notes ?? '',
       date: expense.localDate,
+      isWaste: expense.isWaste,
     );
   }
 
@@ -108,6 +117,7 @@ class ExpenseFormController extends StateNotifier<ExpenseFormState> {
         category: state.category!,
         localDate: state.date,
         notes: state.notes.isNotEmpty ? state.notes : null,
+        isWaste: state.isWaste,
       ));
       if (state.editingId == null) {
         _coins.onTransactionAdded();

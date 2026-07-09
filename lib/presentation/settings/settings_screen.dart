@@ -34,10 +34,8 @@ class SettingsScreen extends ConsumerWidget {
     final notifyEmi = ref.watch(notifyEmiProvider);
     final notifyLedger = ref.watch(notifyLedgerProvider);
     final notifyBudget = ref.watch(notifyBudgetProvider);
-    final notifyDaily = ref.watch(notifyDailyExpenseProvider);
     final reminderHour = ref.watch(dailyReminderHourProvider);
     final reminderMinute = ref.watch(dailyReminderMinuteProvider);
-
 
     return Scaffold(
       appBar: AppBar(
@@ -133,75 +131,20 @@ class SettingsScreen extends ConsumerWidget {
             title: 'DAILY REMINDER',
             children: [
               _DailyReminderTile(
-                enabled: notifyDaily,
                 hour: reminderHour,
                 minute: reminderMinute,
-                onToggle: (v) async {
-                  if (v) {
-                    final ok = await NotificationService.requestAndroidPermission();
-                    if (!ok && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Notification permission denied. Enable in Settings.'),
-                          backgroundColor: AppTheme.warning,
-                        ),
-                      );
-                    }
-                  }
-                  ref.read(notifyDailyExpenseProvider.notifier).state = v;
-                  ref.read(settingsBoxProvider).put('notifyDailyExpense', v);
-                  if (v) {
-                    await NotificationService.scheduleDailyReminder(
-                      hour: reminderHour,
-                      minute: reminderMinute,
-                    );
-                  } else {
-                    await NotificationService.cancelDailyReminder();
-                  }
-                },
                 onTimeChanged: (hour, minute) {
                   ref.read(dailyReminderHourProvider.notifier).state = hour;
                   ref.read(dailyReminderMinuteProvider.notifier).state = minute;
                   ref.read(settingsBoxProvider).put('dailyReminderHour', hour);
                   ref.read(settingsBoxProvider).put('dailyReminderMinute', minute);
-                  if (notifyDaily) {
-                    NotificationService.scheduleDailyReminder(
-                      hour: hour,
-                      minute: minute,
-                    );
-                  }
+                  NotificationService.scheduleDailyReminder(
+                    hour: hour,
+                    minute: minute,
+                  );
                 },
               ),
             ],
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextButton.icon(
-              onPressed: () async {
-                final ok = await NotificationService.requestAndroidPermission();
-                if (ok) {
-                  await NotificationService.showTestNotification();
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Test notification sent! Check your notification shade.'),
-                        backgroundColor: AppTheme.primary,
-                      ),
-                    );
-                  }
-                } else if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Notification permission denied. Enable in Settings.'),
-                      backgroundColor: AppTheme.warning,
-                    ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.notification_add, size: 18, color: AppTheme.primary),
-              label: const Text('Send Test Notification',
-                  style: TextStyle(color: AppTheme.primary)),
-            ),
           ),
           const SizedBox(height: 24),
           _Section(
@@ -1138,17 +1081,13 @@ class _BiometricLockTile extends StatelessWidget {
 // ── Daily Reminder Tile ──
 
 class _DailyReminderTile extends StatefulWidget {
-  final bool enabled;
   final int hour;
   final int minute;
-  final ValueChanged<bool> onToggle;
   final void Function(int hour, int minute) onTimeChanged;
 
   const _DailyReminderTile({
-    required this.enabled,
     required this.hour,
     required this.minute,
-    required this.onToggle,
     required this.onTimeChanged,
   });
 
@@ -1191,54 +1130,47 @@ class _DailyReminderTileState extends State<_DailyReminderTile> {
                             fontWeight: FontWeight.w500,
                             color: AppTheme.textPrimary)),
                     Text(
-                      widget.enabled
-                          ? 'Reminds at ${_timeLabel(widget.hour, widget.minute)}'
-                          : 'Remind to log expenses daily',
+                      'Reminds at ${_timeLabel(widget.hour, widget.minute)}',
                       style: const TextStyle(
                           fontSize: 12, color: AppTheme.textSecondary),
                     ),
                   ],
                 ),
               ),
-              Switch(
-                value: widget.enabled,
-                activeColor: AppTheme.primary,
-                onChanged: widget.onToggle,
+              const Icon(Icons.notifications_active,
+                  size: 20, color: AppTheme.warning),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.schedule, size: 16, color: AppTheme.textSecondary),
+              const SizedBox(width: 8),
+              const Text('Reminder Time',
+                  style: TextStyle(
+                      fontSize: 13, color: AppTheme.textPrimary)),
+              const Spacer(),
+              TextButton.icon(
+                icon: const Icon(Icons.access_time, size: 16),
+                label: Text(
+                  _timeLabel(widget.hour, widget.minute),
+                  style: const TextStyle(color: AppTheme.primary),
+                ),
+                onPressed: () async {
+                  final time = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay(
+                      hour: widget.hour,
+                      minute: widget.minute,
+                    ),
+                  );
+                  if (time != null) {
+                    widget.onTimeChanged(time.hour, time.minute);
+                  }
+                },
               ),
             ],
           ),
-          if (widget.enabled) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.schedule, size: 16, color: AppTheme.textSecondary),
-                const SizedBox(width: 8),
-                const Text('Reminder Time',
-                    style: TextStyle(
-                        fontSize: 13, color: AppTheme.textPrimary)),
-                const Spacer(),
-                TextButton.icon(
-                  icon: const Icon(Icons.access_time, size: 16),
-                  label: Text(
-                    _timeLabel(widget.hour, widget.minute),
-                    style: const TextStyle(color: AppTheme.primary),
-                  ),
-                  onPressed: () async {
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: TimeOfDay(
-                        hour: widget.hour,
-                        minute: widget.minute,
-                      ),
-                    );
-                    if (time != null) {
-                      widget.onTimeChanged(time.hour, time.minute);
-                    }
-                  },
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );

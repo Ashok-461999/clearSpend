@@ -32,8 +32,13 @@ const IsarExpenseSchema = CollectionSchema(
       name: r'dateUtc',
       type: IsarType.dateTime,
     ),
-    r'notes': PropertySchema(
+    r'isWaste': PropertySchema(
       id: 3,
+      name: r'isWaste',
+      type: IsarType.bool,
+    ),
+    r'notes': PropertySchema(
+      id: 4,
       name: r'notes',
       type: IsarType.string,
     )
@@ -90,7 +95,8 @@ void _isarExpenseSerialize(
   writer.writeLong(offsets[0], object.amountMinor);
   writer.writeLong(offsets[1], object.categoryIndex);
   writer.writeDateTime(offsets[2], object.dateUtc);
-  writer.writeString(offsets[3], object.notes);
+  writer.writeBool(offsets[3], object.isWaste);
+  writer.writeString(offsets[4], object.notes);
 }
 
 IsarExpense _isarExpenseDeserialize(
@@ -104,7 +110,8 @@ IsarExpense _isarExpenseDeserialize(
   object.categoryIndex = reader.readLong(offsets[1]);
   object.dateUtc = reader.readDateTime(offsets[2]);
   object.id = id;
-  object.notes = reader.readStringOrNull(offsets[3]);
+  object.isWaste = reader.readBool(offsets[3]);
+  object.notes = reader.readStringOrNull(offsets[4]);
   return object;
 }
 
@@ -122,6 +129,8 @@ P _isarExpenseDeserializeProp<P>(
     case 2:
       return (reader.readDateTime(offset)) as P;
     case 3:
+      return (reader.readBool(offset)) as P;
+    case 4:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -538,6 +547,16 @@ extension IsarExpenseQueryFilter
     });
   }
 
+  QueryBuilder<IsarExpense, IsarExpense, QAfterFilterCondition> isWasteEqualTo(
+      bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isWaste',
+        value: value,
+      ));
+    });
+  }
+
   QueryBuilder<IsarExpense, IsarExpense, QAfterFilterCondition> notesIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -733,6 +752,18 @@ extension IsarExpenseQuerySortBy
     });
   }
 
+  QueryBuilder<IsarExpense, IsarExpense, QAfterSortBy> sortByIsWaste() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isWaste', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IsarExpense, IsarExpense, QAfterSortBy> sortByIsWasteDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isWaste', Sort.desc);
+    });
+  }
+
   QueryBuilder<IsarExpense, IsarExpense, QAfterSortBy> sortByNotes() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'notes', Sort.asc);
@@ -797,6 +828,18 @@ extension IsarExpenseQuerySortThenBy
     });
   }
 
+  QueryBuilder<IsarExpense, IsarExpense, QAfterSortBy> thenByIsWaste() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isWaste', Sort.asc);
+    });
+  }
+
+  QueryBuilder<IsarExpense, IsarExpense, QAfterSortBy> thenByIsWasteDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isWaste', Sort.desc);
+    });
+  }
+
   QueryBuilder<IsarExpense, IsarExpense, QAfterSortBy> thenByNotes() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'notes', Sort.asc);
@@ -827,6 +870,12 @@ extension IsarExpenseQueryWhereDistinct
   QueryBuilder<IsarExpense, IsarExpense, QDistinct> distinctByDateUtc() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'dateUtc');
+    });
+  }
+
+  QueryBuilder<IsarExpense, IsarExpense, QDistinct> distinctByIsWaste() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isWaste');
     });
   }
 
@@ -861,6 +910,12 @@ extension IsarExpenseQueryProperty
   QueryBuilder<IsarExpense, DateTime, QQueryOperations> dateUtcProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'dateUtc');
+    });
+  }
+
+  QueryBuilder<IsarExpense, bool, QQueryOperations> isWasteProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isWaste');
     });
   }
 

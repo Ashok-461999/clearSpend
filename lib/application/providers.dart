@@ -200,7 +200,7 @@ final wastedTotalProvider = Provider<int>((ref) {
   int wasted = 0;
   for (final e in expenses) {
     if (e.isIncome) continue;
-    if (!e.category.isEssential) wasted += e.amountMinor;
+    if (e.isWaste) wasted += e.amountMinor;
   }
   return wasted;
 });

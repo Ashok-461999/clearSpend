@@ -852,6 +852,28 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
             _buildSectionDivider(),
             _buildLocationSection(),
             _buildSectionDivider(),
+            Row(
+              children: [
+                Icon(Icons.mood_bad_outlined,
+                    size: 18, color: AppTheme.expense),
+                const SizedBox(width: 10),
+                const Text('Waste / Frivolous Spending',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: AppTheme.textPrimary)),
+                const Spacer(),
+                SizedBox(
+                  height: 28,
+                  child: Switch.adaptive(
+                    value: state.isWaste,
+                    activeColor: AppTheme.expense,
+                    onChanged: notifier.setIsWaste,
+                  ),
+                ),
+              ],
+            ),
+            _buildSectionDivider(),
             _buildSectionLabel('Notes'),
             _buildGlassField(
               child: TextField(

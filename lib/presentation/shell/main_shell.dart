@@ -29,15 +29,6 @@ class _MainShellState extends ConsumerState<MainShell>
   bool _isOffline = false;
   late final StreamSubscription<List<ConnectivityResult>>
       _connectivitySubscription;
-  late final PageController _pageController;
-
-  static const List<Widget> _screens = [
-    DashboardScreen(),
-    _AnalyticsTab(),
-    KhataScreen(),
-    EmisScreen(),
-    _MoreTab(),
-  ];
 
   static const List<_TabInfo> _tabs = [
     _TabInfo(Icons.grid_view_rounded, 'Home'),
@@ -50,7 +41,6 @@ class _MainShellState extends ConsumerState<MainShell>
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: 0);
     _initConnectivity();
     _connectivitySubscription =
         Connectivity().onConnectivityChanged.listen(_onConnectivityChanged);
@@ -58,7 +48,6 @@ class _MainShellState extends ConsumerState<MainShell>
 
   @override
   void dispose() {
-    _pageController.dispose();
     _connectivitySubscription.cancel();
     super.dispose();
   }
@@ -80,11 +69,6 @@ class _MainShellState extends ConsumerState<MainShell>
   void _onTabChanged(int index) {
     if (index == _selectedIndex) return;
     setState(() => _selectedIndex = index);
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-    );
   }
 
   Widget _buildOfflineBanner() {
@@ -185,15 +169,22 @@ class _MainShellState extends ConsumerState<MainShell>
 
   @override
   Widget build(BuildContext context) {
+    final screens = <Widget>[
+      const DashboardScreen(),
+      const _AnalyticsTab(),
+      const KhataScreen(),
+      const EmisScreen(),
+      const _MoreTab(),
+    ];
+
     return Scaffold(
       body: Column(
         children: [
           if (_isOffline) _buildOfflineBanner(),
           Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: _screens,
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: screens,
             ),
           ),
         ],
