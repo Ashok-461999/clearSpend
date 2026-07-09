@@ -87,6 +87,7 @@ class _BiometricGateState extends ConsumerState<BiometricGate>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   _GateMode _mode = _GateMode.authenticating;
   bool _initialized = false;
+  bool _authInProgress = false;
 
   Timer? _lockoutTimer;
   int _lockoutSeconds = 0;
@@ -159,29 +160,38 @@ class _BiometricGateState extends ConsumerState<BiometricGate>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _mode == _GateMode.unlocked) {
+    if (state == AppLifecycleState.paused && _mode == _GateMode.unlocked) {
       final enabled = ref.read(biometricLockProvider);
-      if (enabled) _startAuth();
+      if (enabled) {
+        setState(() => _mode = _GateMode.authenticating);
+      }
+    }
+    if (state == AppLifecycleState.resumed && _mode != _GateMode.unlocked) {
+      _startAuth();
     }
   }
 
   Future<void> _startAuth() async {
-    final bio = ref.read(biometricLockProvider);
-    final pinHash = ref.read(pinHashProvider);
-    final patternHash = ref.read(patternHashProvider);
-    final setupDone = ref.read(setupCompletedProvider);
-
-    if (!bio && pinHash == null && patternHash == null) {
-      _unlock();
-      return;
-    }
-
-    setState(() => _mode = _GateMode.authenticating);
-
+    if (_authInProgress) return;
+    _authInProgress = true;
     try {
+      final bio = ref.read(biometricLockProvider);
+      final pinHash = ref.read(pinHashProvider);
+      final patternHash = ref.read(patternHashProvider);
+      final setupDone = ref.read(setupCompletedProvider);
+
+      if (!bio && pinHash == null && patternHash == null) {
+        _unlock();
+        return;
+      }
+
+      setState(() => _mode = _GateMode.authenticating);
+
       await _startAuthInner(bio, pinHash, patternHash, setupDone);
     } catch (_) {
       if (mounted) _unlock();
+    } finally {
+      _authInProgress = false;
     }
   }
 
