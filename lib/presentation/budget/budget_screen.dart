@@ -8,7 +8,8 @@ import '../../core/theme.dart';
 import '../../domain/models/goal.dart';
 
 class BudgetScreen extends ConsumerStatefulWidget {
-  const BudgetScreen({super.key});
+  final int initialTab;
+  const BudgetScreen({super.key, this.initialTab = 0});
   @override
   ConsumerState<BudgetScreen> createState() => _BudgetScreenState();
 }
@@ -20,7 +21,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 3, vsync: this, initialIndex: widget.initialTab);
   }
 
   @override
@@ -321,6 +322,22 @@ class _GoalsTab extends ConsumerStatefulWidget {
 }
 
 class _GoalsTabState extends ConsumerState<_GoalsTab> {
+  static final _templates = [
+    ('Emergency Fund', 50000, Icons.shield_outlined, Category.utilities),
+    ('Vacation Trip', 30000, Icons.flight_takeoff, Category.entertainment),
+    ('New Phone', 15000, Icons.phone_android, Category.shopping),
+    ('Laptop', 50000, Icons.laptop, Category.shopping),
+    ('Wedding Fund', 100000, Icons.favorite, Category.other),
+    ('Home Renovation', 200000, Icons.home, Category.housing),
+    ('New Bike/Car', 150000, Icons.directions_car, Category.other),
+    ('Education', 100000, Icons.school, Category.education),
+    ('Festival Shopping', 20000, Icons.celebration, Category.shopping),
+    ('Health Emergency', 30000, Icons.medical_services, Category.health),
+  ];
+
+  int _selectedMonth = DateTime.now().month;
+  int _selectedYear = DateTime.now().year + 1;
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(budgetControllerProvider);
@@ -375,7 +392,6 @@ class _GoalsTabState extends ConsumerState<_GoalsTab> {
     final nameCtrl = TextEditingController();
     final targetCtrl = TextEditingController();
     final contributionCtrl = TextEditingController();
-    DateTime deadline = DateTime.now().add(const Duration(days: 365));
     Category? selectedCat;
 
     showModalBottomSheet(
@@ -399,8 +415,7 @@ class _GoalsTabState extends ConsumerState<_GoalsTab> {
             children: [
               Center(
                 child: Container(
-                  width: 40,
-                  height: 4,
+                  width: 40, height: 4,
                   decoration: BoxDecoration(
                     color: AppTheme.textSecondary.withAlpha(60),
                     borderRadius: BorderRadius.circular(2),
@@ -410,77 +425,188 @@ class _GoalsTabState extends ConsumerState<_GoalsTab> {
               const SizedBox(height: 20),
               const Text('New Savings Goal',
                   style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 18, fontWeight: FontWeight.w700,
                       color: AppTheme.textPrimary)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
+              const Text('Quick templates',
+                  style: TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary, letterSpacing: 0.5)),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 80,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _templates.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) {
+                    final t = _templates[i];
+                    return GestureDetector(
+                      onTap: () {
+                        setDialogState(() {
+                          nameCtrl.text = t.$1;
+                          targetCtrl.text = (t.$2 / 100).toStringAsFixed(0);
+                          selectedCat = t.$4;
+                        });
+                      },
+                      child: Container(
+                        width: 90,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: t.$4.color.withAlpha(20),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: t.$4.color.withAlpha(50)),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(t.$3, size: 20, color: t.$4.color),
+                            const SizedBox(height: 4),
+                            Text(t.$1,
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 10, fontWeight: FontWeight.w600,
+                                    color: t.$4.color)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 14),
               _sheetField(nameCtrl, 'Goal Name', 'e.g. Emergency Fund'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               _sheetField(targetCtrl, 'Target Amount', '0.00',
                   prefix: '₹ ', keyboardType: TextInputType.number),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               _sheetField(contributionCtrl, 'Initial Contribution (optional)',
                   '0.00',
                   prefix: '₹ ', keyboardType: TextInputType.number),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Row(
                 children: [
-                  const Icon(Icons.calendar_today,
+                  const Icon(Icons.calendar_month,
                       size: 16, color: AppTheme.textSecondary),
                   const SizedBox(width: 8),
-                  const Text('Deadline',
+                  const Text('Target Month',
                       style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                          fontWeight: FontWeight.w600, fontSize: 14,
                           color: AppTheme.textPrimary)),
                   const Spacer(),
                   TextButton(
-                    onPressed: () async {
-                      final d = await showDatePicker(
-                        context: ctx,
-                        initialDate: deadline,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime(2100),
-                      );
-                      if (d != null) {
-                        setDialogState(() => deadline = d);
-                      }
-                    },
+                    onPressed: () => _pickMonth(ctx, setDialogState),
                     child: Text(
-                      '${deadline.day}/${deadline.month}/${deadline.year}',
-                      style:
-                          const TextStyle(color: AppTheme.primary),
+                      '${_monthName(_selectedMonth)} $_selectedYear',
+                      style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               FilledButton(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
                 onPressed: () {
                   final target = Money.parseToMinor(targetCtrl.text);
                   if (nameCtrl.text.trim().isEmpty || target == null) {
                     ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(
-                          content: Text('Enter name and target')),
+                      const SnackBar(content: Text('Enter name and target')),
                     );
                     return;
                   }
-                  final initial =
-                      Money.parseToMinor(contributionCtrl.text) ?? 0;
-                  ref
-                      .read(budgetControllerProvider.notifier)
-                      .addGoal(Goal(
-                        name: nameCtrl.text.trim(),
-                        targetAmount: target,
-                        currentAmount: initial,
-                        deadline: deadline,
-                        category: selectedCat,
-                      ));
+                  final initial = Money.parseToMinor(contributionCtrl.text) ?? 0;
+                  ref.read(budgetControllerProvider.notifier).addGoal(Goal(
+                    name: nameCtrl.text.trim(),
+                    targetAmount: target,
+                    currentAmount: initial,
+                    deadline: DateTime(_selectedYear, _selectedMonth + 1, 0),
+                    category: selectedCat,
+                  ));
                   Navigator.of(ctx).pop();
                 },
                 child: const Text('Create Goal'),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _monthName(int m) {
+    const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return names[m - 1];
+  }
+
+  void _pickMonth(BuildContext ctx, void Function(void Function()) setDialogState) {
+    int year = _selectedYear;
+    int month = _selectedMonth;
+    showDialog(
+      context: ctx,
+      builder: (dCtx) => StatefulBuilder(
+        builder: (dCtx, setState) => AlertDialog(
+          backgroundColor: AppTheme.cardSurface,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => setState(() { if (--year < DateTime.now().year) year = DateTime.now().year; }),
+              ),
+              Text('$year', style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w700)),
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: () => setState(() => year++),
+              ),
+            ],
+          ),
+          content: Wrap(
+            spacing: 8, runSpacing: 8,
+            children: List.generate(12, (i) {
+              final m = i + 1;
+              final isPast = year == DateTime.now().year && m < DateTime.now().month;
+              final selected = year == _selectedYear && m == _selectedMonth;
+              return GestureDetector(
+                onTap: isPast ? null : () {
+                  setDialogState(() {
+                    _selectedYear = year;
+                    _selectedMonth = m;
+                  });
+                  Navigator.pop(dCtx);
+                },
+                child: Container(
+                  width: 70,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppTheme.primary.withAlpha(30)
+                        : isPast ? AppTheme.bg.withAlpha(50) : AppTheme.bg.withAlpha(100),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: selected
+                          ? AppTheme.primary
+                          : isPast ? AppTheme.border.withAlpha(30) : AppTheme.border,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _monthName(m),
+                      style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600,
+                        color: isPast
+                            ? AppTheme.textSecondary.withAlpha(60)
+                            : selected ? AppTheme.primary : AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
           ),
         ),
       ),
@@ -499,8 +625,7 @@ class _GoalsTabState extends ConsumerState<_GoalsTab> {
       children: [
         Text(label,
             style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+                fontWeight: FontWeight.w600, fontSize: 13,
                 color: AppTheme.textPrimary)),
         const SizedBox(height: 6),
         Container(
@@ -515,12 +640,10 @@ class _GoalsTabState extends ConsumerState<_GoalsTab> {
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle:
-                  TextStyle(color: AppTheme.textSecondary.withAlpha(120)),
+              hintStyle: TextStyle(color: AppTheme.textSecondary.withAlpha(120)),
               prefixText: prefix,
               border: InputBorder.none,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
           ),
         ),
@@ -537,6 +660,7 @@ class _GoalCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pct = (goal.progress * 100).round();
+    final cat = goal.category ?? Category.other;
     final remainingLabel = goal.monthlyTarget > 0
         ? '${Money.format(goal.monthlyTarget)}/mo needed'
         : null;
@@ -545,9 +669,16 @@ class _GoalCard extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.cardSurface.withAlpha(200),
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.cardSurface,
+            cat.color.withAlpha(8),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: cat.color.withAlpha(30)),
       ),
       child: Column(
         children: [
@@ -556,15 +687,10 @@ class _GoalCard extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: (goal.category ?? Category.other)
-                      .color
-                      .withAlpha(25),
+                  color: cat.color.withAlpha(25),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(
-                    (goal.category ?? Category.other).icon,
-                    color: (goal.category ?? Category.other).color,
-                    size: 24),
+                child: Icon(cat.icon, color: cat.color, size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -573,111 +699,139 @@ class _GoalCard extends ConsumerWidget {
                   children: [
                     Text(goal.name,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 17,
+                            fontWeight: FontWeight.w700, fontSize: 17,
                             color: AppTheme.textPrimary)),
                     const SizedBox(height: 4),
-                    Text(
-                      '${goal.daysRemaining} days remaining',
-                      style: const TextStyle(
-                          fontSize: 12, color: AppTheme.textSecondary),
+                    Row(
+                      children: [
+                        Icon(Icons.schedule, size: 12, color: AppTheme.textSecondary.withAlpha(150)),
+                        const SizedBox(width: 4),
+                        Text(
+                          goal.progress >= 1
+                              ? 'Completed!'
+                              : '${goal.daysRemaining} days left',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: goal.progress >= 1 ? AppTheme.income : AppTheme.textSecondary),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
+              PopupMenuButton<String>(
+                onSelected: (v) {
+                  if (v == 'delete' && goal.id != null) {
+                    ref.read(budgetControllerProvider.notifier).deleteGoal(goal.id!);
+                  }
+                },
+                color: AppTheme.cardSurface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'delete', child: Row(
+                    children: [Icon(Icons.delete_outline, size: 18, color: AppTheme.expense), SizedBox(width: 8), Text('Delete')],
+                  )),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 20),
-          // ── Circular Progress ──
-          SizedBox(
-            height: 100,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 100,
-                  height: 100,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CircularProgressIndicator(
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text('${Money.format(goal.currentAmount)}',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w800,
+                                color: goal.progress >= 1 ? AppTheme.income : AppTheme.textPrimary)),
+                        const SizedBox(width: 4),
+                        Text('of ${Money.format(goal.targetAmount)}',
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
                         value: goal.progress.clamp(0, 1),
-                        strokeWidth: 8,
+                        minHeight: 10,
                         backgroundColor: AppTheme.bg.withAlpha(100),
                         valueColor: AlwaysStoppedAnimation<Color>(
                           goal.progress >= 1
                               ? AppTheme.income
                               : goal.progress >= 0.7
                                   ? AppTheme.warning
-                                  : AppTheme.primary,
+                                  : cat.color,
                         ),
                       ),
-                      Center(
-                        child: Text(
-                          '$pct%',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.textPrimary,
-                            fontFeatures: [
-                              FontFeature.tabularFigures()
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('$pct% complete',
+                        style: TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w600,
+                            color: goal.progress >= 1 ? AppTheme.income : AppTheme.textSecondary)),
+                  ],
                 ),
-                const SizedBox(width: 24),
-                Expanded(
+              ),
+              const SizedBox(width: 16),
+              if (remainingLabel != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accent.withAlpha(15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _statRow('Saved', Money.format(goal.currentAmount),
-                          AppTheme.income),
-                      const SizedBox(height: 6),
-                      _statRow('Target', Money.format(goal.targetAmount),
-                          AppTheme.textSecondary),
-                      if (remainingLabel != null) ...[
-                        const SizedBox(height: 6),
-                        _statRow('Need', remainingLabel, AppTheme.accent),
-                      ],
+                      const Text('Need', style: TextStyle(fontSize: 9, color: AppTheme.textSecondary)),
+                      Text(remainingLabel.split(' ')[0],
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.accent)),
                     ],
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
           if (monthlySavings != null && goal.progress < 1) ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppTheme.primary.withAlpha(12),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: AppTheme.primary.withAlpha(40)),
+                gradient: LinearGradient(
+                  colors: [AppTheme.primary.withAlpha(12), AppTheme.accent.withAlpha(8)],
+                  begin: Alignment.centerLeft, end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.primary.withAlpha(30)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.savings_outlined,
-                      size: 18, color: AppTheme.primary),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withAlpha(20),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.savings_outlined, size: 16, color: AppTheme.primary),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Monthly savings: ${Money.format(monthlySavings!)}',
-                      style: const TextStyle(
-                          fontSize: 13, color: AppTheme.textPrimary),
+                      'Save ${Money.format(monthlySavings!)} this month',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
                     ),
                   ),
-                  TextButton(
+                  FilledButton.tonal(
                     onPressed: () => _contribute(context, ref),
-                    style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12)),
-                    child: const Text('Add',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600)),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(60, 34),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                    child: const Text('Add', style: TextStyle(fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -695,24 +849,47 @@ class _GoalCard extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.cardSurface,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        title: const Text('Add Contribution',
-            style: TextStyle(color: AppTheme.textPrimary)),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(color: AppTheme.textPrimary),
-          decoration: InputDecoration(
-            prefixText: '₹ ',
-            hintText: 'Amount',
-            filled: true,
-            fillColor: AppTheme.bg.withAlpha(100),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppTheme.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.income.withAlpha(20),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.add_circle_outline, size: 18, color: AppTheme.income),
             ),
-          ),
+            const SizedBox(width: 10),
+            const Text('Add Contribution', style: TextStyle(color: AppTheme.textPrimary, fontSize: 17)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('How much to add to "${goal.name}"?',
+                style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+            const SizedBox(height: 14),
+            Container(
+              decoration: BoxDecoration(
+                color: AppTheme.bg.withAlpha(100),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: TextField(
+                controller: ctrl,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18),
+                decoration: const InputDecoration(
+                  prefixText: '₹ ',
+                  hintText: '0',
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -722,9 +899,7 @@ class _GoalCard extends ConsumerWidget {
             onPressed: () {
               final amt = Money.parseToMinor(ctrl.text);
               if (amt != null && amt > 0 && goal.id != null) {
-                ref
-                    .read(budgetControllerProvider.notifier)
-                    .contributeToGoal(goal.id!, amt);
+                ref.read(budgetControllerProvider.notifier).contributeToGoal(goal.id!, amt);
                 Navigator.pop(ctx);
               }
             },
@@ -732,23 +907,6 @@ class _GoalCard extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _statRow(String label, String value, Color color) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(label,
-              style: const TextStyle(
-                  fontSize: 11, color: AppTheme.textSecondary)),
-        ),
-        Text(value,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: color)),
-      ],
     );
   }
 }

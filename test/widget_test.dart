@@ -39,7 +39,7 @@ void main() {
         overrides: [
           expenseRepositoryProvider.overrideWithValue(_MockExpenseRepository()),
         ],
-        child: const MoneyMateApp(),
+        child: const ClearSpendApp(),
       ),
     );
 

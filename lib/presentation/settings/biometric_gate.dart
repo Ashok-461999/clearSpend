@@ -178,6 +178,14 @@ class _BiometricGateState extends ConsumerState<BiometricGate>
 
     setState(() => _mode = _GateMode.authenticating);
 
+    try {
+      await _startAuthInner(bio, pinHash, patternHash, setupDone);
+    } catch (_) {
+      if (mounted) _unlock();
+    }
+  }
+
+  Future<void> _startAuthInner(bool bio, String? pinHash, String? patternHash, bool setupDone) async {
     final box = ref.read(settingsBoxProvider);
     final lockEnd = box.get('lockout_end') as int?;
     if (lockEnd != null) {
@@ -191,8 +199,9 @@ class _BiometricGateState extends ConsumerState<BiometricGate>
     }
 
     if (bio && !setupDone && pinHash == null && patternHash == null) {
-      _resetWizard();
-      setState(() => _mode = _GateMode.setupWizard);
+      final ok = await _tryBiometric();
+      if (ok) return;
+      _unlock();
       return;
     }
 
@@ -215,17 +224,35 @@ class _BiometricGateState extends ConsumerState<BiometricGate>
       final auth = LocalAuthentication();
       final can = await auth.canCheckBiometrics;
       final supported = await auth.isDeviceSupported();
-      if (!can || !supported) return false;
+      if (!can || !supported) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biometric sensor not available on this device'),
+              backgroundColor: AppTheme.warning,
+            ),
+          );
+        }
+        return false;
+      }
       final ok = await auth.authenticate(
-        localizedReason: 'Unlock MoneyMate to continue',
+        localizedReason: 'Unlock ClearSpend to continue',
         options: const AuthenticationOptions(
           stickyAuth: true,
-          biometricOnly: false,
+          biometricOnly: true,
         ),
       );
       if (ok) _unlock();
       return ok;
-    } catch (_) {
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Biometric error: ${e.toString()}'),
+            backgroundColor: AppTheme.expense,
+          ),
+        );
+      }
       return false;
     }
   }
@@ -375,10 +402,6 @@ class _BiometricGateState extends ConsumerState<BiometricGate>
     };
     box.put('security_questions', json.encode(qs));
     box.put('lock_setup_completed', true);
-    final bio = ref.read(biometricLockProvider);
-    if (!bio) {
-      ref.read(biometricLockProvider.notifier).state = true;
-    }
     _resetWizard();
     setState(() => _mode = _GateMode.authenticating);
     _startAuth();
@@ -420,8 +443,29 @@ class _BiometricGateState extends ConsumerState<BiometricGate>
       case _GateMode.locked:
         return _LockoutView();
       case _GateMode.authenticating:
-        return const Center(
-          child: CircularProgressIndicator(color: AppTheme.primary),
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: AppTheme.primary),
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: _unlock,
+                child: const Text(
+                  'Skip for now',
+                  style: TextStyle(color: AppTheme.textSecondary),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Biometric issue? Tap skip to continue',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary.withAlpha(150),
+                ),
+              ),
+            ],
+          ),
         );
       case _GateMode.pinEntry:
         return _PinEntryView();

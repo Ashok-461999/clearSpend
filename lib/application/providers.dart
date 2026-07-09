@@ -172,7 +172,10 @@ final khataControllerProvider =
 
 final coinControllerProvider =
     StateNotifierProvider<CoinController, CoinState>((ref) {
-  return CoinController(ref.watch(sharedPreferencesProvider));
+  return CoinController(
+    ref.watch(sharedPreferencesProvider),
+    ref.watch(coinHistoryBoxProvider),
+  );
 });
 
 final monthExpensesProvider = Provider<List<Expense>>((ref) {
@@ -257,10 +260,4 @@ final sipInstallmentRepositoryProvider =
 final includeInvestmentsInNetWorthProvider = StateProvider<bool>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   return prefs.getBool('include_investments_in_net_worth') ?? false;
-});
-
-final formatMoneyProvider = Provider<String Function(int)>((ref) {
-  final symbol = ref.watch(currencySymbolProvider);
-  final locale = ref.watch(localeForCurrencyProvider);
-  return (int minor) => Money.formatWith(minor, symbol: symbol, locale: locale);
 });

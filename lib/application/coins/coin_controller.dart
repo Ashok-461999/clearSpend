@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../domain/models/coin_transaction.dart';
 
 class CoinState {
   final int balance;
@@ -7,6 +12,7 @@ class CoinState {
   final bool dailyBonusClaimed;
   final int transactionsToday;
   final int budgetStreak;
+  final List<CoinTransaction> history;
 
   const CoinState({
     this.balance = 0,
@@ -14,6 +20,7 @@ class CoinState {
     this.dailyBonusClaimed = false,
     this.transactionsToday = 0,
     this.budgetStreak = 0,
+    this.history = const [],
   });
 
   CoinState copyWith({
@@ -22,6 +29,7 @@ class CoinState {
     bool? dailyBonusClaimed,
     int? transactionsToday,
     int? budgetStreak,
+    List<CoinTransaction>? history,
   }) {
     return CoinState(
       balance: balance ?? this.balance,
@@ -29,19 +37,52 @@ class CoinState {
       dailyBonusClaimed: dailyBonusClaimed ?? this.dailyBonusClaimed,
       transactionsToday: transactionsToday ?? this.transactionsToday,
       budgetStreak: budgetStreak ?? this.budgetStreak,
+      history: history ?? this.history,
     );
   }
 }
 
+final coinHistoryBoxProvider = Provider<Box>((ref) => throw UnimplementedError());
+
 class CoinController extends StateNotifier<CoinState> {
   final SharedPreferences _prefs;
+  final Box _historyBox;
 
-  CoinController(this._prefs) : super(const CoinState()) {
+  CoinController(this._prefs, this._historyBox) : super(const CoinState()) {
     _load();
   }
 
+  static int _computeBalance(List<CoinTransaction> history) {
+    return history.fold<int>(0, (s, t) => s + t.amount);
+  }
+
+  List<CoinTransaction> _readHistory() {
+    final raw = _historyBox.get('log');
+    if (raw == null) return [];
+    final list = jsonDecode(raw as String) as List;
+    return list.map((e) => CoinTransaction.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  void _saveHistory(List<CoinTransaction> history) {
+    final json = jsonEncode(history.map((t) => t.toJson()).toList());
+    _historyBox.put('log', json);
+  }
+
+  void _appendTransaction(int amount, CoinReason reason, String label) {
+    final history = _readHistory();
+    history.add(CoinTransaction(
+      timestamp: DateTime.now(),
+      amount: amount,
+      reason: reason,
+      label: label,
+    ));
+    _saveHistory(history);
+  }
+
   void _load() {
-    final balance = _prefs.getInt('coin_balance') ?? 0;
+    final history = _readHistory();
+    final balance = _computeBalance(history);
+
     final loginStreak = _prefs.getInt('coin_login_streak') ?? 0;
     final lastLoginDate = _prefs.getString('coin_last_login');
     final transactionsToday = _prefs.getInt('coin_tx_today') ?? 0;
@@ -50,7 +91,6 @@ class CoinController extends StateNotifier<CoinState> {
     final isNewDay = lastLoginDate != today;
 
     int newStreak = loginStreak;
-    bool claimed = false;
 
     if (isNewDay) {
       if (lastLoginDate == _yesterday()) {
@@ -63,8 +103,11 @@ class CoinController extends StateNotifier<CoinState> {
       _prefs.setInt('coin_tx_today', 0);
 
       final streakBonus = (newStreak * 5).clamp(5, 50);
-      final newBalance = balance + 10 + streakBonus;
-      _prefs.setInt('coin_balance', newBalance);
+      _appendTransaction(10, CoinReason.dailyLogin, 'Daily login bonus');
+      if (streakBonus > 0) {
+        _appendTransaction(streakBonus, CoinReason.loginStreak, 'Login streak day $newStreak');
+      }
+      final newBalance = _computeBalance(_readHistory());
 
       state = CoinState(
         balance: newBalance,
@@ -72,15 +115,17 @@ class CoinController extends StateNotifier<CoinState> {
         dailyBonusClaimed: false,
         transactionsToday: 0,
         budgetStreak: _prefs.getInt('coin_budget_streak') ?? 0,
+        history: _readHistory(),
       );
     } else {
-      claimed = _prefs.getBool('coin_daily_claimed') ?? false;
+      final claimed = _prefs.getBool('coin_daily_claimed') ?? false;
       state = CoinState(
         balance: balance,
         loginStreak: loginStreak,
         dailyBonusClaimed: claimed,
         transactionsToday: transactionsToday,
         budgetStreak: _prefs.getInt('coin_budget_streak') ?? 0,
+        history: history,
       );
     }
   }
@@ -89,16 +134,16 @@ class CoinController extends StateNotifier<CoinState> {
     final txToday = state.transactionsToday;
     if (txToday >= 10) return;
 
-    final earned = 2;
-    final newBalance = state.balance + earned;
+    _appendTransaction(2, CoinReason.transactionAdded, 'Transaction recorded');
+    final newBalance = _computeBalance(_readHistory());
     final newTxToday = txToday + 1;
 
-    _prefs.setInt('coin_balance', newBalance);
     _prefs.setInt('coin_tx_today', newTxToday);
 
     state = state.copyWith(
       balance: newBalance,
       transactionsToday: newTxToday,
+      history: _readHistory(),
     );
   }
 
@@ -107,16 +152,20 @@ class CoinController extends StateNotifier<CoinState> {
       final newStreak = state.budgetStreak + 1;
       _prefs.setInt('coin_budget_streak', newStreak);
 
-      int bonus = 5;
-      if (newStreak == 7) bonus = 50;
-      if (newStreak == 30) bonus = 200;
+      if (newStreak == 30) {
+        _appendTransaction(200, CoinReason.budgetStreak30, '30-day budget streak!');
+      } else if (newStreak == 7) {
+        _appendTransaction(50, CoinReason.budgetStreak7, '7-day budget streak!');
+      } else {
+        _appendTransaction(5, CoinReason.budgetStreak, 'Budget streak day $newStreak');
+      }
 
-      final newBalance = state.balance + bonus;
-      _prefs.setInt('coin_balance', newBalance);
+      final newBalance = _computeBalance(_readHistory());
 
       state = state.copyWith(
         balance: newBalance,
         budgetStreak: newStreak,
+        history: _readHistory(),
       );
     } else {
       _prefs.setInt('coin_budget_streak', 0);

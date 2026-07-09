@@ -46,11 +46,21 @@ class BudgetHiveState {
     return spentForCategory(cat) / limit;
   }
 
-  int get totalBudgeted =>
-      budgets.fold<int>(0, (s, b) => s + b.monthlyLimit);
+  int get totalBudgeted {
+    final now = DateTime.now();
+    final ym = now.year * 100 + now.month;
+    return budgets
+        .where((b) => b.yearMonth == ym)
+        .fold<int>(0, (s, b) => s + b.monthlyLimit);
+  }
 
-  int get totalSpent =>
-      budgets.fold<int>(0, (s, b) => s + spentForCategory(b.category));
+  int get totalSpent {
+    final now = DateTime.now();
+    final ym = now.year * 100 + now.month;
+    return budgets
+        .where((b) => b.yearMonth == ym)
+        .fold<int>(0, (s, b) => s + spentForCategory(b.category));
+  }
 
   List<MapEntry<Category, (int spent, int? limit)>> get categoryComparisons {
     final cats = Category.values.where((c) => !c.isIncome).toList();
@@ -126,8 +136,7 @@ class BudgetHiveController extends StateNotifier<BudgetHiveState> {
 
     if (limit <= 0) {
       if (existing != null) {
-        final key = existing.toJsonString();
-        await _budgetBox.delete(key);
+        await _budgetBox.delete(existing.key);
       }
       _loadFromHive();
       return;

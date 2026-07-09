@@ -15,6 +15,8 @@ import '../shared/category_chip.dart';
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
 
+  const HistoryScreen._internal() : super();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(historyControllerProvider);
@@ -22,22 +24,7 @@ class HistoryScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Transactions')),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _RangeFilterChips(state: state, notifier: notifier)),
-          SliverToBoxAdapter(child: _RangeHeader(state: state, notifier: notifier)),
-          SliverToBoxAdapter(child: _CategoryFilter(state: state, notifier: notifier)),
-          if (state.days.isEmpty)
-            SliverFillRemaining(child: _buildEmptyState(context, ref))
-          else
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => _DaySection(day: state.days[index]),
-                childCount: state.days.length,
-              ),
-            ),
-        ],
-      ),
+      body: const HistoryBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           ref.read(expenseFormControllerProvider.notifier).reset();
@@ -487,5 +474,60 @@ class _ExpenseRow extends StatelessWidget {
         ),
       );
     });
+  }
+}
+
+class HistoryBody extends ConsumerWidget {
+  const HistoryBody();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(historyControllerProvider);
+    final notifier = ref.read(historyControllerProvider.notifier);
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+            child: _RangeFilterChips(state: state, notifier: notifier)),
+        SliverToBoxAdapter(
+            child: _RangeHeader(state: state, notifier: notifier)),
+        SliverToBoxAdapter(
+            child: _CategoryFilter(state: state, notifier: notifier)),
+        if (state.days.isEmpty)
+          SliverFillRemaining(child: _HistoryEmptyState())
+        else
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => _DaySection(day: state.days[index]),
+              childCount: state.days.length,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _HistoryEmptyState extends StatelessWidget {
+  const _HistoryEmptyState();
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.receipt_long_outlined,
+              size: 48,
+              color: AppTheme.textSecondary.withAlpha(100)),
+          const SizedBox(height: 16),
+          const Text('No transactions yet',
+              style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          const Text('Tap + to add your first expense',
+              style: TextStyle(
+                  fontSize: 13, color: AppTheme.textSecondary)),
+        ],
+      ),
+    );
   }
 }

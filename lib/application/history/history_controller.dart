@@ -196,7 +196,7 @@ class HistoryController extends StateNotifier<HistoryState> {
           return DayGroup(
             date: e.key,
             expenses: e.value,
-            total: expenseTotal,
+            total: incomeTotal + expenseTotal,
             incomeTotal: incomeTotal,
             expenseTotal: expenseTotal,
           );

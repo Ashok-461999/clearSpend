@@ -6,8 +6,8 @@ import 'core/theme.dart';
 import 'presentation/settings/biometric_gate.dart';
 import 'presentation/shell/main_shell.dart';
 
-class MoneyMateApp extends ConsumerWidget {
-  const MoneyMateApp({super.key});
+class ClearSpendApp extends ConsumerWidget {
+  const ClearSpendApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

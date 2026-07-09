@@ -12,8 +12,10 @@ import '../../application/settings/backup_service.dart';
 import '../../application/settings/settings_controller.dart';
 import '../../core/date_range.dart';
 import '../../core/money.dart';
+import '../../core/notification_service.dart';
 import '../../core/theme.dart';
 import 'about_screen.dart';
+import 'privacy_policy_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -32,8 +34,10 @@ class SettingsScreen extends ConsumerWidget {
     final notifyEmi = ref.watch(notifyEmiProvider);
     final notifyLedger = ref.watch(notifyLedgerProvider);
     final notifyBudget = ref.watch(notifyBudgetProvider);
-    final currencyCode = ref.watch(currencyCodeProvider);
-    final formatMoney = ref.watch(formatMoneyProvider);
+    final notifyDaily = ref.watch(notifyDailyExpenseProvider);
+    final reminderHour = ref.watch(dailyReminderHourProvider);
+    final reminderMinute = ref.watch(dailyReminderMinuteProvider);
+
 
     return Scaffold(
       appBar: AppBar(
@@ -56,14 +60,6 @@ class SettingsScreen extends ConsumerWidget {
             children: [
               _ThemeTile(themeMode: themeMode, ref: ref),
               _DefaultRangeTile(defaultRange: defaultRange, ref: ref),
-              _CurrencyTile(
-                currency: currencyCode,
-                formatMoney: formatMoney,
-                onChange: (code) {
-                  final box = ref.read(settingsBoxProvider);
-                  box.put('currencyCode', code);
-                },
-              ),
               _WeekStartTile(
                 firstDay: settings.firstDayOfWeek,
                 onChanged: (v) => notifier.setFirstDayOfWeek(v),
@@ -134,6 +130,81 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
           _Section(
+            title: 'DAILY REMINDER',
+            children: [
+              _DailyReminderTile(
+                enabled: notifyDaily,
+                hour: reminderHour,
+                minute: reminderMinute,
+                onToggle: (v) async {
+                  if (v) {
+                    final ok = await NotificationService.requestAndroidPermission();
+                    if (!ok && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Notification permission denied. Enable in Settings.'),
+                          backgroundColor: AppTheme.warning,
+                        ),
+                      );
+                    }
+                  }
+                  ref.read(notifyDailyExpenseProvider.notifier).state = v;
+                  ref.read(settingsBoxProvider).put('notifyDailyExpense', v);
+                  if (v) {
+                    await NotificationService.scheduleDailyReminder(
+                      hour: reminderHour,
+                      minute: reminderMinute,
+                    );
+                  } else {
+                    await NotificationService.cancelDailyReminder();
+                  }
+                },
+                onTimeChanged: (hour, minute) {
+                  ref.read(dailyReminderHourProvider.notifier).state = hour;
+                  ref.read(dailyReminderMinuteProvider.notifier).state = minute;
+                  ref.read(settingsBoxProvider).put('dailyReminderHour', hour);
+                  ref.read(settingsBoxProvider).put('dailyReminderMinute', minute);
+                  if (notifyDaily) {
+                    NotificationService.scheduleDailyReminder(
+                      hour: hour,
+                      minute: minute,
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextButton.icon(
+              onPressed: () async {
+                final ok = await NotificationService.requestAndroidPermission();
+                if (ok) {
+                  await NotificationService.showTestNotification();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Test notification sent! Check your notification shade.'),
+                        backgroundColor: AppTheme.primary,
+                      ),
+                    );
+                  }
+                } else if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Notification permission denied. Enable in Settings.'),
+                      backgroundColor: AppTheme.warning,
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.notification_add, size: 18, color: AppTheme.primary),
+              label: const Text('Send Test Notification',
+                  style: TextStyle(color: AppTheme.primary)),
+            ),
+          ),
+          const SizedBox(height: 24),
+          _Section(
             title: 'DATA',
             children: [
               const _BackupTile(),
@@ -168,6 +239,30 @@ class SettingsScreen extends ConsumerWidget {
                   MaterialPageRoute(builder: (_) => const AboutScreen()),
                 ),
               ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGlass,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.shield_outlined,
+                      color: AppTheme.primary, size: 20),
+                ),
+                title: const Text('Privacy Policy',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textPrimary)),
+                subtitle: const Text('Your data stays on your device',
+                    style: TextStyle(
+                        fontSize: 12, color: AppTheme.textSecondary)),
+                trailing: const Icon(Icons.chevron_right,
+                    size: 18, color: AppTheme.textSecondary),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const PrivacyPolicyScreen()),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 32),
@@ -179,25 +274,43 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _toggleBiometricLock(
       BuildContext context, WidgetRef ref, bool enable) async {
     if (enable) {
-      final localAuth = LocalAuthentication();
-      final canCheck = await localAuth.canCheckBiometrics;
-      if (!canCheck) {
+      try {
+        final localAuth = LocalAuthentication();
+        final canCheck = await localAuth.canCheckBiometrics;
+        final supported = await localAuth.isDeviceSupported();
+        if (!canCheck || !supported) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text(
+                      'Biometrics not available on this device')),
+            );
+          }
+          return;
+        }
+        final authenticated = await localAuth.authenticate(
+          localizedReason: 'Enable app lock with biometrics',
+          options: const AuthenticationOptions(biometricOnly: true),
+        );
+        if (!authenticated) return;
+      } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content:
-                    Text('Biometrics not available on this device')),
+            SnackBar(
+              content: Text('Biometric error: $e'),
+              backgroundColor: AppTheme.expense,
+            ),
           );
         }
         return;
       }
-      final authenticated = await localAuth.authenticate(
-        localizedReason: 'Enable app lock with biometrics',
-      );
-      if (!authenticated) return;
     }
     ref.read(biometricLockProvider.notifier).state = enable;
-    ref.read(settingsBoxProvider).put('biometricLock', enable);
+    final box = ref.read(settingsBoxProvider);
+    box.put('biometricLock', enable);
+    if (enable) {
+      box.put('lock_setup_completed', true);
+    }
   }
 
   void _editName(
@@ -820,152 +933,6 @@ class _DefaultRangeTile extends StatelessWidget {
   }
 }
 
-class _CurrencyTile extends StatelessWidget {
-  final String currency;
-  final String Function(int) formatMoney;
-  final ValueChanged<String> onChange;
-  const _CurrencyTile({
-    required this.currency,
-    required this.formatMoney,
-    required this.onChange,
-  });
-
-  static const _currencies = [
-    ('INR', '₹', 'Indian Rupee'),
-    ('USD', r'$', 'US Dollar'),
-    ('EUR', '€', 'Euro'),
-    ('GBP', '£', 'British Pound'),
-    ('JPY', '¥', 'Japanese Yen'),
-    ('CNY', '¥', 'Chinese Yuan'),
-    ('AED', 'د.إ', 'UAE Dirham'),
-    ('SAR', '﷼', 'Saudi Riyal'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final current = _currencies.firstWhere(
-      (c) => c.$1 == currency,
-      orElse: () => ('INR', '₹', 'Indian Rupee'),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.warningGlass,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.monetization_on_outlined,
-                    color: AppTheme.warning, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: const Text('Currency',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 16,
-                        color: AppTheme.textPrimary)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _CurrencyPicker(
-            currencies: _currencies,
-            selectedCode: currency,
-            onChanged: onChange,
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppTheme.cardSurface.withAlpha(100),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Text('${current.$2}  ',
-                    style: const TextStyle(
-                        fontSize: 16, color: AppTheme.textPrimary)),
-                Expanded(
-                  child: Text(
-                    '${formatMoney(123450)} preview',
-                    style: const TextStyle(
-                        fontSize: 13, color: AppTheme.textSecondary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CurrencyPicker extends StatelessWidget {
-  final List<(String, String, String)> currencies;
-  final String selectedCode;
-  final ValueChanged<String> onChanged;
-
-  const _CurrencyPicker({
-    required this.currencies,
-    required this.selectedCode,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: currencies.map((c) {
-        final isSelected = c.$1 == selectedCode;
-        return GestureDetector(
-          onTap: () => onChanged(c.$1),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppTheme.warning.withAlpha(30)
-                  : AppTheme.cardSurface.withAlpha(80),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected
-                    ? AppTheme.warning.withAlpha(120)
-                    : AppTheme.border,
-              ),
-            ),
-            child: Column(
-              children: [
-                Text(c.$2,
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
-                        color: isSelected
-                            ? AppTheme.warning
-                            : AppTheme.textPrimary)),
-                Text(c.$1,
-                    style: TextStyle(
-                        fontSize: 10,
-                        color: isSelected
-                            ? AppTheme.warning
-                            : AppTheme.textSecondary)),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
 class _WeekStartTile extends StatelessWidget {
   final int firstDay;
   final ValueChanged<int> onChanged;
@@ -1162,6 +1129,116 @@ class _BiometricLockTile extends StatelessWidget {
             activeColor: AppTheme.primary,
             onChanged: onChanged,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Daily Reminder Tile ──
+
+class _DailyReminderTile extends StatefulWidget {
+  final bool enabled;
+  final int hour;
+  final int minute;
+  final ValueChanged<bool> onToggle;
+  final void Function(int hour, int minute) onTimeChanged;
+
+  const _DailyReminderTile({
+    required this.enabled,
+    required this.hour,
+    required this.minute,
+    required this.onToggle,
+    required this.onTimeChanged,
+  });
+
+  @override
+  State<_DailyReminderTile> createState() => _DailyReminderTileState();
+}
+
+class _DailyReminderTileState extends State<_DailyReminderTile> {
+  String _timeLabel(int h, int m) {
+    final period = h >= 12 ? 'PM' : 'AM';
+    final hour = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+    return '${hour.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')} $period';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.warningGlass,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.notifications_active_outlined,
+                    color: AppTheme.warning, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Daily Reminder',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.textPrimary)),
+                    Text(
+                      widget.enabled
+                          ? 'Reminds at ${_timeLabel(widget.hour, widget.minute)}'
+                          : 'Remind to log expenses daily',
+                      style: const TextStyle(
+                          fontSize: 12, color: AppTheme.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: widget.enabled,
+                activeColor: AppTheme.primary,
+                onChanged: widget.onToggle,
+              ),
+            ],
+          ),
+          if (widget.enabled) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.schedule, size: 16, color: AppTheme.textSecondary),
+                const SizedBox(width: 8),
+                const Text('Reminder Time',
+                    style: TextStyle(
+                        fontSize: 13, color: AppTheme.textPrimary)),
+                const Spacer(),
+                TextButton.icon(
+                  icon: const Icon(Icons.access_time, size: 16),
+                  label: Text(
+                    _timeLabel(widget.hour, widget.minute),
+                    style: const TextStyle(color: AppTheme.primary),
+                  ),
+                  onPressed: () async {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay(
+                        hour: widget.hour,
+                        minute: widget.minute,
+                      ),
+                    );
+                    if (time != null) {
+                      widget.onTimeChanged(time.hour, time.minute);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

@@ -41,35 +41,21 @@ class UserProfile {
 
 class SettingsState {
   final UserProfile profile;
-  final String currencyCode;
   final int firstDayOfWeek;
 
   const SettingsState({
     this.profile = const UserProfile(),
-    this.currencyCode = 'INR',
     this.firstDayOfWeek = DateTime.monday,
   });
 
   SettingsState copyWith({
     UserProfile? profile,
-    String? currencyCode,
     int? firstDayOfWeek,
   }) {
     return SettingsState(
       profile: profile ?? this.profile,
-      currencyCode: currencyCode ?? this.currencyCode,
       firstDayOfWeek: firstDayOfWeek ?? this.firstDayOfWeek,
     );
-  }
-
-  String get currencySymbol {
-    switch (currencyCode) {
-      case 'INR': return '₹';
-      case 'USD': return '\$';
-      case 'EUR': return '€';
-      case 'GBP': return '£';
-      default: return '₹';
-    }
   }
 }
 
@@ -88,7 +74,6 @@ class SettingsController extends StateNotifier<SettingsState> {
         monthlyBudget: _prefs.getInt('monthly_budget') ?? 0,
         imagePath: _prefs.getString('profile_image'),
       ),
-      currencyCode: _prefs.getString('currency_code') ?? 'INR',
       firstDayOfWeek: _prefs.getInt('first_day_of_week') ?? DateTime.monday,
     );
   }
@@ -97,7 +82,6 @@ class SettingsController extends StateNotifier<SettingsState> {
     _prefs.setString('profile_name', state.profile.name);
     _prefs.setString('profile_email', state.profile.email);
     _prefs.setInt('monthly_budget', state.profile.monthlyBudget);
-    _prefs.setString('currency_code', state.currencyCode);
     _prefs.setInt('first_day_of_week', state.firstDayOfWeek);
     if (state.profile.imagePath != null) {
       _prefs.setString('profile_image', state.profile.imagePath!);
@@ -139,11 +123,6 @@ class SettingsController extends StateNotifier<SettingsState> {
     state = state.copyWith(
       profile: state.profile.copyWith(monthlyBudget: budget),
     );
-    _saveToPrefs();
-  }
-
-  void setCurrency(String code) {
-    state = state.copyWith(currencyCode: code);
     _saveToPrefs();
   }
 

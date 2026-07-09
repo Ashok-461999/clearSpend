@@ -7,6 +7,7 @@ import '../../core/money.dart';
 import '../../core/category.dart';
 import '../../domain/models/expense.dart';
 
+
 class QuickExpenseSheet extends ConsumerStatefulWidget {
   const QuickExpenseSheet({super.key});
 
@@ -34,7 +35,7 @@ class _QuickExpenseSheetState extends ConsumerState<QuickExpenseSheet> {
   final _notesCtrl = TextEditingController();
   final _amountFocus = FocusNode();
   Category? _selectedCategory;
-  int _step = 0;
+
 
   final List<_QuickPreset> _pinnedPresets = [];
 
@@ -80,24 +81,6 @@ class _QuickExpenseSheetState extends ConsumerState<QuickExpenseSheet> {
     });
   }
 
-  void _nextStep() {
-    final amount = Money.parseToMinor(_amountCtrl.text);
-    if (amount == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter a valid amount'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-      return;
-    }
-    setState(() => _step = 1);
-  }
-
-  void _prevStep() {
-    setState(() => _step = 0);
-  }
-
   void _savePreset() {
     final amount = Money.parseToMinor(_amountCtrl.text);
     if (amount == null || _selectedCategory == null) return;
@@ -118,7 +101,10 @@ class _QuickExpenseSheetState extends ConsumerState<QuickExpenseSheet> {
 
   void _applyPreset(_QuickPreset preset) {
     _setQuickAmount(preset.amountMinor);
-    setState(() => _selectedCategory = preset.category);
+    setState(() {
+      _selectedCategory = preset.category;
+
+    });
     ref.read(expenseFormControllerProvider.notifier).setCategory(preset.category);
     _submit();
   }
@@ -143,67 +129,13 @@ class _QuickExpenseSheetState extends ConsumerState<QuickExpenseSheet> {
   }
 
   Widget _buildTitle() {
-    return Row(
-      children: [
-        Text(
-          'Quick Expense',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const Spacer(),
-        if (_step == 1)
-          TextButton.icon(
-            onPressed: _prevStep,
-            icon: const Icon(Icons.arrow_back, size: 18),
-            label: const Text('Amount'),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildStepIndicator() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildStepDot(0, 'Amount'),
-        const SizedBox(width: 32),
-        _buildStepDot(1, 'Category'),
-      ],
-    );
-  }
-
-  Widget _buildStepDot(int index, String label) {
-    final active = _step == index;
-    final done = _step > index;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: active
-                ? AppTheme.primary
-                : done
-                    ? AppTheme.income
-                    : AppTheme.textSecondary.withAlpha(60),
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-            color: active ? AppTheme.primary : AppTheme.textSecondary,
-          ),
-        ),
-      ],
+    return Text(
+      'Quick Expense',
+      style: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        color: AppTheme.textPrimary,
+      ),
     );
   }
 
@@ -429,33 +361,6 @@ class _QuickExpenseSheetState extends ConsumerState<QuickExpenseSheet> {
     );
   }
 
-  Widget _buildAmountStep(List<Expense> recentExpenses) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      key: const ValueKey('amount_step'),
-      children: [
-        const SizedBox(height: 20),
-        _buildAmountField(),
-        const SizedBox(height: 12),
-        _buildQuickAmountChips(),
-        _buildRecentAmounts(recentExpenses),
-        _buildPinnedPresets(),
-        const SizedBox(height: 20),
-        FilledButton(
-          onPressed: _nextStep,
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('Choose Category'),
-              SizedBox(width: 8),
-              Icon(Icons.arrow_forward, size: 18),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildRecentCategoryIcons(List<Category> recentCats) {
     if (recentCats.isEmpty) return const SizedBox.shrink();
     return Column(
@@ -660,85 +565,6 @@ class _QuickExpenseSheetState extends ConsumerState<QuickExpenseSheet> {
     );
   }
 
-  Widget _buildCategoryStep(
-    List<Category> recentCats,
-    Category? selected,
-    String? error,
-    bool isSubmitting,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      key: const ValueKey('category_step'),
-      children: [
-        const SizedBox(height: 16),
-        _buildRecentCategoryIcons(recentCats),
-        _buildCategorySection(
-          'Expense',
-          Category.values.where((c) => !c.isIncome).toList(),
-          selected,
-          (c) {
-            setState(() => _selectedCategory = c);
-            ref.read(expenseFormControllerProvider.notifier).setCategory(c);
-          },
-        ),
-        const SizedBox(height: 8),
-        _buildCategorySection(
-          'Income',
-          Category.values.where((c) => c.isIncome).toList(),
-          selected,
-          (c) {
-            setState(() => _selectedCategory = c);
-            ref.read(expenseFormControllerProvider.notifier).setCategory(c);
-          },
-        ),
-        _buildNotesField(),
-        if (error != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            error,
-            style: const TextStyle(color: AppTheme.expense, fontSize: 13),
-          ),
-        ],
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _selectedCategory == null ? null : _savePreset,
-          icon: const Icon(Icons.push_pin_outlined, size: 18),
-          label: const Text('Save as quick preset'),
-        ),
-        const SizedBox(height: 8),
-        FilledButton(
-          onPressed: isSubmitting
-              ? null
-              : () async {
-                  final notifier =
-                      ref.read(expenseFormControllerProvider.notifier);
-                  final success = await notifier.submit();
-                  if (success && context.mounted) {
-                    Navigator.of(context).pop();
-                  }
-                },
-          child: isSubmitting
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_circle_outline, size: 20),
-                    SizedBox(width: 8),
-                    Text('Add Expense'),
-                  ],
-                ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
@@ -761,6 +587,8 @@ class _QuickExpenseSheetState extends ConsumerState<QuickExpenseSheet> {
       ..sort((a, b) => b.dateUtc.compareTo(a.dateUtc));
     final recentExpenses = sortedExpenses.take(10).toList();
 
+    final hasAmount = Money.parseToMinor(_amountCtrl.text) != null;
+
     return Container(
       padding: EdgeInsets.only(bottom: bottom),
       decoration: BoxDecoration(
@@ -779,33 +607,78 @@ class _QuickExpenseSheetState extends ConsumerState<QuickExpenseSheet> {
               _buildDragHandle(),
               const SizedBox(height: 20),
               _buildTitle(),
-              const SizedBox(height: 12),
-              _buildStepIndicator(),
               const SizedBox(height: 16),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                switchInCurve: Curves.easeInOut,
-                switchOutCurve: Curves.easeInOut,
-                transitionBuilder: (child, animation) {
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0.2, 0),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    ),
-                  );
+              _buildAmountField(),
+              const SizedBox(height: 12),
+              _buildQuickAmountChips(),
+              _buildRecentAmounts(recentExpenses),
+              _buildPinnedPresets(),
+              const SizedBox(height: 16),
+              _buildRecentCategoryIcons(recentCats),
+              _buildCategorySection(
+                'Expense',
+                Category.values.where((c) => !c.isIncome).toList(),
+                _selectedCategory,
+                (c) {
+                  setState(() => _selectedCategory = c);
+                  ref.read(expenseFormControllerProvider.notifier).setCategory(c);
                 },
-                child: _step == 0
-                    ? _buildAmountStep(recentExpenses)
-                    : _buildCategoryStep(
-                        recentCats,
-                        _selectedCategory,
-                        state.error,
-                        state.isSubmitting,
-                      ),
+              ),
+              const SizedBox(height: 8),
+              _buildCategorySection(
+                'Income',
+                Category.values.where((c) => c.isIncome).toList(),
+                _selectedCategory,
+                (c) {
+                  setState(() => _selectedCategory = c);
+                  ref.read(expenseFormControllerProvider.notifier).setCategory(c);
+                },
+              ),
+              _buildNotesField(),
+              if (state.error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  state.error!,
+                  style: const TextStyle(color: AppTheme.expense, fontSize: 13),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _selectedCategory == null ? null : _savePreset,
+                      icon: const Icon(Icons.push_pin_outlined, size: 18),
+                      label: const Text('Save preset'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton(
+                      onPressed: (hasAmount && _selectedCategory != null && !state.isSubmitting)
+                          ? _submit
+                          : null,
+                      child: state.isSubmitting
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_circle_outline, size: 20),
+                                SizedBox(width: 8),
+                                Text('Add Expense'),
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

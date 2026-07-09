@@ -7,10 +7,12 @@ import '../../core/category.dart';
 import '../../core/money.dart';
 import '../../core/theme.dart';
 import '../../domain/models/expense.dart';
+import '../../domain/models/goal.dart';
 import '../expense/expense_form_screen.dart';
 import '../history/history_screen.dart';
 import '../khata/khata_screen.dart';
 import '../scanner/qr_scanner_screen.dart';
+import '../budget/budget_screen.dart';
 import '../shared/quick_expense_sheet.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -128,7 +130,39 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             const SizedBox(height: 14),
             const _BalanceCard(),
             const SizedBox(height: 14),
-            const _BudgetCard(),
+            Consumer(builder: (context, ref, _) {
+              final wasted = ref.watch(wastedTotalProvider);
+              final state = ref.watch(historyControllerProvider);
+              final total = state.totalExpense;
+              return _SpendingMood(totalExpense: total, wasted: wasted);
+            }),
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const BudgetScreen()),
+              ),
+              child: const _BudgetCard(),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _QuickChip(
+                  icon: Icons.flag_outlined,
+                  label: 'Goals',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const BudgetScreen(initialTab: 1)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _QuickChip(
+                  icon: Icons.tune_rounded,
+                  label: 'Set Budget',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const BudgetScreen()),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 14),
             Consumer(builder: (context, ref, _) {
               final khata = ref.watch(khataControllerProvider);
@@ -138,7 +172,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 entryCount: khata.entries.length,
               );
             }),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
+            const _DailyTip(),
+            const SizedBox(height: 14),
             const _SmartInsights(),
             const SizedBox(height: 20),
             Consumer(builder: (context, ref, _) {
@@ -149,6 +185,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 monthExpenses: expenses,
                 monthlyBudget: monthlyBudget,
                 daysInMonth: DateTime.now().day,
+              );
+            }),
+            const SizedBox(height: 20),
+            Consumer(builder: (context, ref, _) {
+              final historyState = ref.watch(historyControllerProvider);
+              final monthlyBudget = ref.watch(settingsControllerProvider).profile.monthlyBudget;
+              final goals = ref.watch(budgetControllerProvider).goals;
+              final wasted = ref.watch(wastedTotalProvider);
+              final sortedCats = ref.watch(categoryTotalsProvider);
+              return _FinancialHealthCard(
+                totalIncome: historyState.totalIncome,
+                totalExpense: historyState.totalExpense,
+                monthlyBudget: monthlyBudget,
+                goals: goals,
+                wasted: wasted,
+                categoryCount: sortedCats.length,
+                txCount: historyState.days.fold<int>(0, (s, d) => s + d.expenses.length),
               );
             }),
             const SizedBox(height: 20),
@@ -619,8 +672,8 @@ class _SmartInsights extends ConsumerWidget {
 
     final scoreLabel = spendingScore >= 90 ? 'Excellent' : spendingScore >= 75 ? 'Good' : spendingScore >= 50 ? 'Fair' : 'Needs Attention';
     final scoreColor = spendingScore >= 90 ? AppTheme.income : spendingScore >= 75 ? AppTheme.primary : spendingScore >= 50 ? AppTheme.warning : AppTheme.expense;
-    final wastePct = total > 0 ? (wasted / total * 100).round() : 0;
-    final essentialPct = 100 - wastePct;
+    final wastePct = total > 0 ? (wasted / total * 100).round().clamp(0, 100) : 0;
+    final essentialPct = (100 - wastePct).clamp(1, 100);
 
     String buildPrimaryInsight() {
       if (total == 0) return 'No spending yet this month. Start tracking to get insights!';
@@ -939,6 +992,451 @@ class _SpendingStreakCard extends StatelessWidget {
   }
 }
 
+const _dailyTips = [
+  'Try the 50/30/20 rule: 50% needs, 30% wants, 20% savings.',
+  'A small daily coffee costs ₹3000+ a year. Brew at home!',
+  'Save first, spend later — pay yourself before bills.',
+  'Track every expense for 30 days. You\'ll spot leaks instantly.',
+  'An emergency fund of 3-6 months of expenses is your safety net.',
+  'Round up purchases and save the change. It adds up!',
+  'Cook at home 3 more times a week. Save ₹2000+ monthly.',
+  'Unused subscriptions? Cancel them. That\'s free money.',
+  'Wait 24 hours before buying anything over ₹1000.',
+  'Pay credit card bills in full. Interest is wealth killer.',
+  'Set a no-spend day each week. Your wallet will thank you.',
+  'Buy generic brands. Same quality, half the price.',
+  'Review your recurring bills yearly. Negotiate better rates.',
+  'Use public transport twice a week. Save fuel + stress.',
+  'Sell things you haven\'t used in 6 months. Declutter + earn.',
+  'A ₹500 monthly SIP in index funds = ₹1L+ in 10 years.',
+  'Don\'t shop when hungry, angry, or bored. Emotional spending hurts.',
+  'Cashback apps are great, but don\'t buy just for the cashback.',
+  'Your biggest wealth builder is your income. Invest in skills.',
+  'Compare insurance plans yearly. Loyalty rarely pays.',
+  'Set a savings goal with a photo. Visual motivation works.',
+  'Repay high-interest debt first. It\'s an emergency.',
+  'Use the library instead of buying books. Free knowledge.',
+  'Bulk cook on weekends. Save time + money on weeknights.',
+  'Track your net worth monthly, not daily. Focus on trends.',
+];
+
+class _SpendingMood extends StatelessWidget {
+  final int totalExpense;
+  final int wasted;
+  const _SpendingMood({required this.totalExpense, required this.wasted});
+
+  @override
+  Widget build(BuildContext context) {
+    final wastePct = totalExpense > 0 ? wasted / totalExpense : 0.0;
+    String emoji;
+    String message;
+    Color color;
+    if (totalExpense == 0) {
+      emoji = '\u{1F60A}';
+      message = 'No spending yet. You\'re doing great!';
+      color = AppTheme.income;
+    } else if (wastePct < 0.2) {
+      emoji = '\u{1F929}';
+      message = 'Smart spender! Mostly on essentials.';
+      color = AppTheme.income;
+    } else if (wastePct < 0.4) {
+      emoji = '\u{1F60A}';
+      message = 'Pretty balanced. Keep it up!';
+      color = AppTheme.primary;
+    } else if (wastePct < 0.6) {
+      emoji = '\u{1F914}';
+      message = 'Half on wants. Try cutting back a bit.';
+      color = AppTheme.warning;
+    } else if (wastePct < 0.8) {
+      emoji = '\u{1F622}';
+      message = 'Most spending is on wants. Pause and review!';
+      color = AppTheme.warning;
+    } else {
+      emoji = '\u{1F480}';
+      message = 'Almost all on non-essentials! Time for a reset.';
+      color = AppTheme.expense;
+    }
+    final saved = totalExpense - wasted;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withAlpha(12), color.withAlpha(4)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withAlpha(30)),
+      ),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 36)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(message,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: color)),
+                if (totalExpense > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '\u{2714}\u{FE0F} ${Money.format(saved)} on essentials  \u{274C} ${Money.format(wasted)} on wants',
+                    style: TextStyle(fontSize: 11, color: color.withAlpha(180)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DailyTip extends ConsumerWidget {
+  const _DailyTip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = DateTime.now();
+    final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays;
+    final tipIndex = dayOfYear % _dailyTips.length;
+    final tip = _dailyTips[tipIndex];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.accentGlass,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.accent.withAlpha(40)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withAlpha(20),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.lightbulb_outline,
+                size: 18, color: AppTheme.accent),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text('Daily Tip',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.accent,
+                            letterSpacing: 0.5)),
+                    const Spacer(),
+                    Text('\u{1F4C5} Day ${now.day}',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: AppTheme.accent.withAlpha(150))),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(tip,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.textPrimary,
+                        height: 1.4)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _QuickChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: AppTheme.cardSurface.withAlpha(150),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.border),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: AppTheme.primary),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary)),
+              const SizedBox(width: 2),
+              const Icon(Icons.chevron_right,
+                  size: 14, color: AppTheme.textSecondary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FinancialHealthCard extends StatelessWidget {
+  final int totalIncome;
+  final int totalExpense;
+  final int monthlyBudget;
+  final List<Goal> goals;
+  final int wasted;
+  final int categoryCount;
+  final int txCount;
+
+  const _FinancialHealthCard({
+    required this.totalIncome,
+    required this.totalExpense,
+    required this.monthlyBudget,
+    required this.goals,
+    required this.wasted,
+    required this.categoryCount,
+    required this.txCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final savingsRate = totalIncome > 0
+        ? ((totalIncome - totalExpense) / totalIncome * 100).clamp(0, 100).round()
+        : 0;
+    final budgetRate = monthlyBudget > 0
+        ? ((monthlyBudget - totalExpense) / monthlyBudget * 100).clamp(0, 100).round()
+        : 100;
+    final goalRate = goals.isNotEmpty
+        ? (goals.fold<double>(0, (s, g) => s + g.progress) / goals.length * 100).round()
+        : 0;
+    final wasteRate = totalExpense > 0
+        ? ((totalExpense - wasted) / totalExpense * 100).clamp(0, 100).round()
+        : 100;
+    final consistRate = (txCount.clamp(0, 30) / 30 * 100).round();
+
+    final metrics = [
+      _HealthMetric('Savings Rate', savingsRate, Icons.trending_up,
+          '$savingsRate% of income saved'),
+      _HealthMetric('Budget Adherence', budgetRate, Icons.account_balance_wallet,
+          '$budgetRate% budget remaining'),
+      _HealthMetric('Goal Progress', goalRate, Icons.flag,
+          '$goalRate% of goals on track'),
+      _HealthMetric('Essential Spend', wasteRate, Icons.shopping_cart,
+          '$wasteRate% on essentials'),
+      _HealthMetric('Tracking Habit', consistRate, Icons.calendar_month,
+          '$txCount entries this month'),
+    ];
+
+    final overall =
+        (metrics.fold<int>(0, (s, m) => s + m.score) / metrics.length).round();
+
+    String healthLabel;
+    Color healthColor;
+    if (overall >= 80) {
+      healthLabel = 'Excellent';
+      healthColor = AppTheme.income;
+    } else if (overall >= 60) {
+      healthLabel = 'Good';
+      healthColor = AppTheme.primary;
+    } else if (overall >= 40) {
+      healthLabel = 'Fair';
+      healthColor = AppTheme.warning;
+    } else {
+      healthLabel = 'Needs Work';
+      healthColor = AppTheme.expense;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardSurface.withAlpha(180),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: healthColor.withAlpha(60)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: healthColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.favorite, size: 16, color: healthColor),
+              ),
+              const SizedBox(width: 10),
+              const Text('Financial Health', style: AppTheme.sectionTitle),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: healthColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('$overall',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: healthColor)),
+                    const SizedBox(width: 4),
+                    Text(healthLabel,
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: healthColor)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...metrics.map((m) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _HealthMetricRow(metric: m, total: metrics.length),
+              )),
+          const SizedBox(height: 4),
+          _buildTip(overall, savingsRate, budgetRate, goalRate),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTip(int overall, int savings, int budget, int goals) {
+    String tip;
+    if (overall >= 80) {
+      tip = 'Great shape! Keep tracking daily to maintain your health.';
+    } else if (savings < 20) {
+      tip = 'Try to save at least 20% of your income each month.';
+    } else if (budget < 30) {
+      tip = 'You\'re close to your budget limit. Consider cutting non-essentials.';
+    } else if (goals < 30) {
+      tip = 'Boost your goal contributions to stay on track.';
+    } else if (totalExpense > totalIncome) {
+      tip = 'Expenses exceed income. Review your spending habits.';
+    } else {
+      tip = 'Keep building good financial habits!';
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: overall >= 60
+            ? AppTheme.income.withAlpha(15)
+            : AppTheme.warning.withAlpha(15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: overall >= 60
+              ? AppTheme.income.withAlpha(40)
+              : AppTheme.warning.withAlpha(40),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            overall >= 60 ? Icons.check_circle : Icons.info_outline,
+            size: 16,
+            color: overall >= 60 ? AppTheme.income : AppTheme.warning,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(tip,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: overall >= 60
+                        ? AppTheme.income
+                        : AppTheme.warning)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HealthMetric {
+  final String label;
+  final int score;
+  final IconData icon;
+  final String subtitle;
+  const _HealthMetric(this.label, this.score, this.icon, this.subtitle);
+}
+
+class _HealthMetricRow extends StatelessWidget {
+  final _HealthMetric metric;
+  final int total;
+  const _HealthMetricRow({required this.metric, required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = metric.score >= 70
+        ? AppTheme.income
+        : metric.score >= 40
+            ? AppTheme.warning
+            : AppTheme.expense;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(metric.icon, size: 14, color: color),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(metric.label,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary)),
+            ),
+            Text('${metric.score}%',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: color)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: metric.score / 100.0,
+            minHeight: 6,
+            backgroundColor: AppTheme.bg.withAlpha(100),
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _CoinVaultCard extends StatelessWidget {
   final CoinState coinState;
   const _CoinVaultCard({super.key, required this.coinState});
@@ -1067,6 +1565,153 @@ class _CoinVaultCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _CoinHistorySheet.show(context),
+              icon: const Icon(Icons.history, size: 16),
+              label: const Text('View History',
+                  style: TextStyle(fontSize: 13)),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 40),
+                side: BorderSide(color: AppTheme.warning.withAlpha(80)),
+                foregroundColor: AppTheme.warning,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CoinHistorySheet extends ConsumerWidget {
+  const _CoinHistorySheet();
+
+  static void show(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.cardSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const _CoinHistorySheet(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(coinControllerProvider);
+    final history = state.history.reversed.toList();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      maxChildSize: 0.85,
+      minChildSize: 0.3,
+      expand: false,
+      builder: (_, scrollCtrl) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.history, size: 20, color: AppTheme.warning),
+                const SizedBox(width: 8),
+                const Text('Coin History',
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningGlass,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text('Balance: ${state.balance}',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.warning)),
+                ),
+              ],
+            ),
+          ),
+          const Divider(color: AppTheme.border),
+          if (history.isEmpty)
+            const Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.monetization_on_outlined,
+                        size: 48, color: AppTheme.textSecondary),
+                    SizedBox(height: 12),
+                    Text('No coins earned yet',
+                        style: TextStyle(color: AppTheme.textSecondary)),
+                    SizedBox(height: 4),
+                    Text('Add transactions and log in daily to earn coins',
+                        style: TextStyle(
+                            fontSize: 12, color: AppTheme.textSecondary)),
+                  ],
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: ListView.separated(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: history.length,
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, color: AppTheme.border),
+                itemBuilder: (_, i) {
+                  final tx = history[i];
+                  final isPositive = tx.amount > 0;
+                  return ListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isPositive
+                            ? AppTheme.incomeGlass
+                            : AppTheme.expenseGlass,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        isPositive ? Icons.add_circle_outline : Icons.remove_circle_outline,
+                        size: 18,
+                        color: isPositive ? AppTheme.income : AppTheme.expense,
+                      ),
+                    ),
+                    title: Text(tx.label,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: AppTheme.textPrimary)),
+                    subtitle: Text(
+                      '${tx.timestamp.day}/${tx.timestamp.month}/${tx.timestamp.year} ${tx.timestamp.hour.toString().padLeft(2, '0')}:${tx.timestamp.minute.toString().padLeft(2, '0')}',
+                      style: const TextStyle(
+                          fontSize: 11, color: AppTheme.textSecondary),
+                    ),
+                    trailing: Text(
+                      '${isPositive ? '+' : ''}${tx.amount}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: isPositive ? AppTheme.income : AppTheme.expense,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );

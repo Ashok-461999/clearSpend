@@ -17,6 +17,69 @@ class AnalysisScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Spending Analysis')),
+      body: const AnalysisBody(),
+    );
+  }
+}
+
+class AnalysisBody extends ConsumerWidget {
+  const AnalysisBody();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final d = _buildData(ref);
+    if (d.allExpenses.isEmpty) return _buildEmptyState();
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        _RangeFilterRow(state: d.state, notifier: d.notifier),
+        const SizedBox(height: 16),
+        _MetricRow(total: d.total, count: d.count, dailyAvg: d.dailyAvg),
+        const SizedBox(height: 20),
+        _WasteGauge(
+            wastePct: d.wastePct, wasted: d.wasted, essential: d.essential),
+        const SizedBox(height: 20),
+        _SpendingTrendChart(days: d.sortedDays, sma: d.sma, slope: d.slope),
+        const SizedBox(height: 20),
+        _WeekdayChart(weekdayAvg: d.weekdayAvg, maxValue: d.maxWeekday),
+        const SizedBox(height: 20),
+        _CategoryPieChart(catTotals: d.catTotals, total: d.total),
+        const SizedBox(height: 20),
+        _InsightsCard(
+            total: d.total,
+            count: d.count,
+            dailyAvg: d.dailyAvg,
+            slope: d.slope,
+            sortedCats: d.sortedCats,
+            weekdayAvg: d.weekdayAvg,
+            topExpenses: d.topExpenses,
+            wastePct: d.wastePct),
+        const SizedBox(height: 20),
+        if (d.sortedCats.isNotEmpty) ...[
+          const Text('Category Analysis', style: AppTheme.sectionTitle),
+          const SizedBox(height: 12),
+          ...d.sortedCats.map((e) => _CategoryAnalysisTile(
+              category: e.key, amount: e.value, total: d.total)),
+          const SizedBox(height: 20),
+        ],
+        if (d.topExpenses.isNotEmpty) ...[
+          const Text('Top Expenses', style: AppTheme.sectionTitle),
+          const SizedBox(height: 8),
+          ...d.topExpenses.take(5).map((e) => _TopExpenseRow(expense: e)),
+          const SizedBox(height: 20),
+        ],
+        if (d.state.days.isNotEmpty) ...[
+          const Text('Daily Breakdown', style: AppTheme.sectionTitle),
+          const SizedBox(height: 8),
+          ...d.state.days.map((dd) => _DayBreakdownCard(day: dd)),
+        ],
+      ],
+    );
+  }
+
+  _AnalysisData _buildData(WidgetRef ref) {
     final state = ref.watch(analysisControllerProvider);
     final notifier = ref.read(analysisControllerProvider.notifier);
     final allExpenses =
@@ -29,7 +92,8 @@ class AnalysisScreen extends ConsumerWidget {
     int wasted = 0;
     int essential = 0;
     for (final e in allExpenses) {
-      catTotals.update(e.category, (v) => v + e.amountMinor, ifAbsent: () => e.amountMinor);
+      catTotals
+          .update(e.category, (v) => v + e.amountMinor, ifAbsent: () => e.amountMinor);
       if (e.category.isEssential) {
         essential += e.amountMinor;
       } else {
@@ -59,65 +123,32 @@ class AnalysisScreen extends ConsumerWidget {
     final weekdayAvg = weekdayTotals.asMap().entries
         .map((e) => weekdayCounts[e.key] > 0 ? e.value ~/ weekdayCounts[e.key] : 0)
         .toList();
-    final maxWeekday = weekdayAvg.isEmpty ? 0 : weekdayAvg.reduce((a, b) => a > b ? a : b);
+    final maxWeekday =
+        weekdayAvg.isEmpty ? 0 : weekdayAvg.reduce((a, b) => a > b ? a : b);
 
     final slope = _computeTrend(sortedDays);
     final smaWindow =
         sortedDays.length >= 14 ? 7 : (sortedDays.length >= 7 ? 3 : 0);
     final sma = smaWindow > 0 ? _computeSMA(sortedDays, smaWindow) : <double?>[];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Spending Analysis'),
-        actions: [_buildHealthBadge(wastePct)],
-      ),
-      body: allExpenses.isEmpty
-          ? _buildEmptyState()
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              children: [
-                _RangeFilterRow(state: state, notifier: notifier),
-                const SizedBox(height: 16),
-                _MetricRow(total: total, count: count, dailyAvg: dailyAvg),
-                const SizedBox(height: 20),
-                _WasteGauge(wastePct: wastePct, wasted: wasted, essential: essential),
-                const SizedBox(height: 20),
-                _SpendingTrendChart(days: sortedDays, sma: sma, slope: slope),
-                const SizedBox(height: 20),
-                _WeekdayChart(weekdayAvg: weekdayAvg, maxValue: maxWeekday),
-                const SizedBox(height: 20),
-                _CategoryPieChart(catTotals: catTotals, total: total),
-                const SizedBox(height: 20),
-                _InsightsCard(
-                    total: total,
-                    count: count,
-                    dailyAvg: dailyAvg,
-                    slope: slope,
-                    sortedCats: sortedCats,
-                    weekdayAvg: weekdayAvg,
-                    topExpenses: topExpenses,
-                    wastePct: wastePct),
-                const SizedBox(height: 20),
-                if (sortedCats.isNotEmpty) ...[
-                  const Text('Category Analysis', style: AppTheme.sectionTitle),
-                  const SizedBox(height: 12),
-                  ...sortedCats.map((e) => _CategoryAnalysisTile(
-                      category: e.key, amount: e.value, total: total)),
-                  const SizedBox(height: 20),
-                ],
-                if (topExpenses.isNotEmpty) ...[
-                  const Text('Top Expenses', style: AppTheme.sectionTitle),
-                  const SizedBox(height: 8),
-                  ...topExpenses.take(5).map((e) => _TopExpenseRow(expense: e)),
-                  const SizedBox(height: 20),
-                ],
-                if (state.days.isNotEmpty) ...[
-                  const Text('Daily Breakdown', style: AppTheme.sectionTitle),
-                  const SizedBox(height: 8),
-                  ...state.days.map((d) => _DayBreakdownCard(day: d)),
-                ],
-              ],
-            ),
+    return _AnalysisData(
+      state: state,
+      notifier: notifier,
+      allExpenses: allExpenses,
+      total: total,
+      count: count,
+      catTotals: catTotals,
+      wasted: wasted,
+      essential: essential,
+      sortedCats: sortedCats,
+      wastePct: wastePct,
+      dailyAvg: dailyAvg,
+      topExpenses: topExpenses,
+      sortedDays: sortedDays,
+      weekdayAvg: weekdayAvg,
+      maxWeekday: maxWeekday,
+      slope: slope,
+      sma: sma,
     );
   }
 
@@ -1524,4 +1555,44 @@ class _MiniExpenseRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AnalysisData {
+  final HistoryState state;
+  final HistoryController notifier;
+  final List<Expense> allExpenses;
+  final int total;
+  final int count;
+  final Map<Category, int> catTotals;
+  final int wasted;
+  final int essential;
+  final List<MapEntry<Category, int>> sortedCats;
+  final double wastePct;
+  final int dailyAvg;
+  final List<Expense> topExpenses;
+  final List<DayGroup> sortedDays;
+  final List<int> weekdayAvg;
+  final int maxWeekday;
+  final double slope;
+  final List<double?> sma;
+
+  const _AnalysisData({
+    required this.state,
+    required this.notifier,
+    required this.allExpenses,
+    required this.total,
+    required this.count,
+    required this.catTotals,
+    required this.wasted,
+    required this.essential,
+    required this.sortedCats,
+    required this.wastePct,
+    required this.dailyAvg,
+    required this.topExpenses,
+    required this.sortedDays,
+    required this.weekdayAvg,
+    required this.maxWeekday,
+    required this.slope,
+    required this.sma,
+  });
 }
